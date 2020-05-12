@@ -1,0 +1,149 @@
+library(stringr)
+library(ggplot2)
+library(dplyr)
+library(plot3D)
+library("scatterplot3d")
+library(plotly)
+# 1 to 1,000,000
+
+try_1 <- rbind (New_form_1$V3 ,test_2$V4 ,test_3$V4 ,test_4$V4 ,test_5$V4 ,
+               test_6$V4 ,test_7$V4 ,test_8$V4 ,test_9$V4 ,test_10$V4 ,
+               test_11$V4 ,test_12$V4 ,test_13$V4 ,test_14$V4 ,
+               test_15$V4 ,test_16$V4 ,test_17$V4 ,test_18$V4 ,test_19$V4 ,
+               test_20$V4 ,test_21$V4 ,test_22$V4 ,test_23$V4 ,
+               test_24$V4 ,test_25$V4 ,test_26$V4 ,test_27$V4 ,
+               test_28$V4 ,test_29$V4 ,test_30$V4 ,test_31$V4 ,
+               test_32$V4 ,test_33$V4 ,test_34$V4 ,test_35$V4 ,
+               test_36$V4 ,test_37$V4 ,test_38$V4 ,test_39$V4 ,
+               test_40$V4 ,test_41$V4 ,test_42$V4 ,test_43$V4 ,
+               test_44$V4 ,test_45$V4 ,test_46$V4 ,test_47$V4 ,
+               test_48$V4 ,test_49$V4 ,test_50$V4 ,test_51$V4 ,
+               test_52$V4 ,test_53$V4 ,test_54$V4 ,test_55$V4 ,
+               test_56$V4 ,test_57$V4 ,test_58$V4 ,test_59$V4 ,
+               test_60$V4 ,test_61$V4 ,test_62$V4 ,test_63$V4 )
+
+
+##################################
+
+#try_1 <- rbind((New_form_1$V3[1:1000]),test_2$V4[1:1000])
+
+newname_1 <- t(New_form_1$xy)
+
+colnames(try_1) <- newname_1
+
+###############################################################################################
+info_1 <- cbind.data.frame(x=as.numeric(sapply(strsplit(colnames(try_1),split="x"),"[",1)),
+                         y=as.numeric(sapply(strsplit(colnames(try_1),split="x"),"[",2)),
+                         total_counts=apply(try_1,2,sum))
+###############################################################################################
+
+ggplot(info_1, aes(x = x, y = y)) + 
+  geom_point(aes(size = total_counts),color = "blue")  +
+  coord_equal() + 
+  xlab('Longitude') + 
+  ylab('Latitude')
+
+
+info_1_1 <- subset(info_1, x <= 100)
+
+
+
+
+
+info_1_2 <- info_1_1
+info_1_2$total_counts <- info_1_2$total_counts / 10
+
+
+ggplot(info_1_2, aes(x = x, y = y)) + 
+  geom_point(aes(size = total_counts),color = "blue")  +
+  coord_equal() + 
+  xlab('Longitude') + 
+  ylab('Latitude')
+
+scatter3D(info_1_2$x, info_1_2$y, info_1_2$total_counts, clab = c("Number of cells / 100"))
+
+
+scatter3D(info_1_2$x, info_1_2$y, info_1_2$total_counts, phi = 0, bty ="g", clab = c("Number of cells"))
+
+##############################
+
+
+##############################
+
+
+info_2 <- info_1
+
+
+
+
+ggplot(info_2, aes(x = x, y = y)) + 
+  geom_point(aes(size = total_counts),color = "blue")  +
+  coord_equal() + 
+  xlab('Longitude') + 
+  ylab('Latitude')
+
+
+
+s <- c("1:10", "11:21","22:32")
+s1 <- c(1:10, 11:21,22:32)
+for (i in s){
+  print((i))
+}
+
+noquote("2324")
+
+
+
+
+
+total_new <- cbind(info_2$total_counts[1:262144],info_2$total_counts[(262144+1):(2*262144)],info_2$total_counts[(2*262144+1):(3*262144)],
+                   info_2$total_counts[(3*262144+1):(4*262144)],info_2$total_counts[(4*262144+1):(5*262144)],info_2$total_counts[(5*262144+1):(6*262144)],
+                   info_2$total_counts[(6*262144+1):(7*262144)],info_2$total_counts[(7*262144+1):(8*262144)],info_2$total_counts[(8*262144+1):(9*262144)],
+                   info_2$total_counts[(9*262144+1):(10*262144)],info_2$total_counts[(10*262144+1):(11*262144)],info_2$total_counts[(11*262144+1):(12*262144)],
+                   info_2$total_counts[(12*262144+1):(13*262144)], info_2$total_counts[(13*262144+1):(14*262144)],info_2$total_counts[(14*262144+1):(15*262144)],
+                   info_2$total_counts[(15*262144+1):(16*262144)],info_2$total_counts[(16*262144+1):(17*262144)], info_2$total_counts[(17*262144+1):(18*262144)],
+                   info_2$total_counts[(18*262144+1):(19*262144)],info_2$total_counts[(19*262144+1):(20*262144)],info_2$total_counts[(20*262144+1):(21*262144)],
+                   info_2$total_counts[(21*262144+1):(22*262144)],info_2$total_counts[(22*262144+1):(23*262144)],info_2$total_counts[(23*262144+1):(24*262144)],
+                   info_2$total_counts[(24*262144+1):(25*262144)], info_2$total_counts[(25*262144+1):(26*262144)],info_2$total_counts[(26*262144+1):(27*262144)])
+
+total_new_sum <- apply(total_new,1,sum)
+
+
+info_2_2 <- cbind.data.frame(x = info_2[1:262144,1], y =  info_2[1:262144,2],total_counts = total_new_sum)
+
+
+
+
+
+
+
+
+scatter3D(info_2_2$x, info_2_2$y, info_2_2$total_counts, clab = c("Number of cells"))
+
+
+qnorm(0.1, mean = 1132.926, sd = 367.8438, lower.tail = TRUE, log.p = FALSE)
+
+
+for (i in (1:length(info_2_2$total_counts))){
+  if(info_2_2$total_counts[i] <= 670){
+    info_2_2$total_counts[i] <- 0
+  }else if (info_2_2$total_counts[i] > 670 & info_2_2$total_counts[i] <= 873){
+    info_2_2$total_counts[i] <- 1
+  }else if (info_2_2$total_counts[i]> 873 & info_2_2$total_counts[i] <= 1364){
+    info_2_2$total_counts[i] <- 2
+  }else {info_2_2$total_counts[i] <- 3}
+}
+
+
+info_2_3 <- cbind.data.frame(x = info_2[1:262144,1], y =  info_2[1:262144,2],total_counts = total_new_sum)
+
+ggplot(info_2_3, aes(x = x, y = y)) + 
+  geom_point(aes(size = total_counts),color = "blue")  +
+  coord_equal() + 
+  xlab('Longitude') + 
+  ylab('Latitude')
+
+
+info_2_3<-info_2_3[!(info_2_3$total_counts < 1670),]
+
+
