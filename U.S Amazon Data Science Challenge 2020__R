@@ -1,0 +1,1063 @@
+---
+title: "MDSC R Notebook Team We R"
+output: html_notebook
+---
+
+####
+#### Data Combination
+####
+library(readr)
+library(data.table)
+library(base)
+library(dplyr)
+library(crayon)
+
+###################################################
+#############  2017 data pre-process##############
+###################################################
+
+
+mapafter <- read_csv("../Datasets/mapping_files/mapafter.csv")
+score2017 <- read.csv("../Datasets/impact_scores/impact_score_2017.csv",header = T)
+drop<-c("X.1","X")
+score2017 <- score2017[,!(names(score2017) %in% drop)]
+
+colnames(mapafter) <- c("lat", "lng","zip5")
+
+filenames <- list.files("../Datasets/weather_forecasts/GFS_2017", pattern = ".csv", full.names = TRUE)
+length(filenames)
+temp <- lapply(filenames,fread,sep=",")
+data<-rbindlist(temp,fill = TRUE)
+
+scorell2017 <- merge(score2017,mapafter, by="zip5")
+
+data$Date <-  as.Date(as.character(data$Date), "%Y%m%d")
+scorell2017$date_key <-  as.Date(as.character(scorell2017$date_key), "%Y/%m/%d")
+colnames(scorell2017) <- c("zip5","Date","impact_score","lat","lng")
+
+test1 <- inner_join(data, scorell2017, by = c("lat", "lng","Date"))
+
+write.csv(test1, file = "final_2017.csv")
+
+
+
+###################################################
+#############  2018 data pre-process##############
+###################################################
+
+
+
+mapafter2 <- read_csv("../Datasets/mapping_files/mapafter.csv")
+score2018 <- read_csv("../Datasets/impact_scores/impact_score_2018.csv")
+drop<-c("X1")
+score2018 <- score2018[,!(names(score2018) %in% drop)]
+colnames(mapafter2) <- c("lat", "lng","zip5")
+
+
+filenames2 <- list.files("../Datasets/weather_forecasts/GFS_2018", pattern = ".csv", full.names = TRUE)
+temp2 <- lapply(filenames2,fread,sep=",")
+data2 <-rbindlist(temp2,fill = TRUE)
+score2018$zip5=as.numeric(score2018$zip5)
+mapafter2$zip5<-as.numeric(mapafter2$zip5)
+scorell2018 <- merge(score2018,mapafter2, by="zip5")
+
+
+data2$Date <-  as.Date(as.character(data2$Date), "%Y%m%d")
+scorell2018$date_key <-  as.Date(as.character(scorell2018$date_key), "%Y-%m-%d")
+colnames(scorell2018)[which(names(scorell2018) == "date_key")] <- "Date"
+
+
+test2 <- inner_join(data2, scorell2018, by = c("lat", "lng","Date"))
+
+write.csv(test2, file = "final_2018.csv")
+
+
+
+###################################################
+#############  2019 data pre-process##############
+###################################################
+
+
+mapafter <- read_csv("../Datasets/mapping_files/mapafter.csv")
+score2019 <- read_csv("../Datasets/impact_scores/impact_score_2019_public_test.csv")
+
+colnames(mapafter) <- c("lat", "lng","zip5")
+
+filenames <- list.files("../Datasets/weather_forecasts/GFS_2019", pattern = ".csv", full.names = TRUE)
+length(filenames)
+temp <- lapply(filenames,fread,sep=",")
+data<-rbindlist(temp,fill = TRUE)
+score2019$zip5=as.numeric(score2019$zip5)
+mapafter$zip5<-as.numeric(mapafter$zip5)
+scorell2019 <- merge(score2019,mapafter, by="zip5")
+
+data$Date <-  as.Date(as.character(data$Date), "%Y%m%d")
+scorell2019$date_key <-  as.Date(as.character(scorell2019$date_key), "%Y-%m-%d")
+colnames(scorell2019) <- c("zip5","X","Date","lat","lng")
+
+
+test3 <- inner_join(data, scorell2019, by = c("lat", "lng","Date"))
+
+
+
+write.csv(test3, file = "final_2019.csv")
+
+
+#####
+##### 2019 Data Cleaning
+#####
+data2019<-read.csv("../final_2019.csv")
+data1718<-read.csv("../final1718.csv")
+
+drop<-c("X","X.1")
+data2019clean <- data2019[,!(names(data2019) %in% drop)]
+
+
+dropcol<-c()
+perlist<-c()
+for(i in 1:dim(data2019clean)[2]){
+  numna = sum(is.na(data2019clean[,i]))
+  per = (numna/dim(data2019clean)[1])
+  if(per>=0.4){
+    perlist<-c(perlist,numna)
+    dropcol<-c(dropcol,colnames(data2019clean)[i])
+  }
+}
+
+cleancol2019 <- data2019clean[,!(names(data2019clean) %in% dropcol)]
+or <- order(cleancol2019[,"zip5"],cleancol2019[,"Date"],cleancol2019["Time"])
+order2019<-cleancol2019[or,]
+name1718<-colnames(data1718)
+name2019<-colnames(order2019)
+inter<- intersect(name1718,name2019)
+differ<- setdiff(name2019,inter)
+order2019 <- order2019[,!(names(order2019) %in% differ)]
+
+### deal with NA ###
+for(i in 1:dim(order2019)[2]){
+  length = 0
+  start = 0
+  for(j in 1:dim(order2019)[1]){
+
+    if(is.na(order2019[j,i])){
+      if(j==1){
+        start = 1
+      }
+      else{
+        if(is.na(order2019[j-1,i])==FALSE){
+          start = j
+        }
+      }
+      length=length+1
+      if(is.na(order2019[j+1,i])==FALSE){
+        order2019[start:j,i]=mean(order2019[j+1,i],order2019[start-1,i])
+        start = 0
+      }
+    }
+  }
+}
+
+for(i in 1:dim(order2019)[2]){
+  numna = sum(is.na(order2019[,i]))
+  print(numna)
+}
+
+write.csv(order2019, file = "clean_2019.csv")
+
+## delete column of 1718, making it has same dimension with 2019##
+data1718<-read.csv("../final1718.csv")
+song_1718<-read.csv("../data1718_final_clean.csv")
+subs = c(colnames(order2019))
+
+data1718_cleaning = data1718[subs]
+clean_1718<-cbind(data1718_cleaning,data1718$impact_score,song_1718$impact_score_2)
+colnames(clean_1718)[length(colnames(clean_1718))] <- "impact_score_2"
+colnames(clean_1718)[length(colnames(clean_1718))-1] <- "impact_score"
+write.csv(clean_1718, file = "clean_1718.csv")
+
+
+
+#### 
+#### Weather Averaging by Day
+####
+
+library(foreach)
+library(iterators)
+library(doParallel)
+library(parallel)
+library(MASS)
+library(dplyr)
+library(class)
+rm(list = ls())
+numCores <- detectCores()
+registerDoParallel(numCores)
+
+setwd("C:/Amazon data challenge/Analysis/Data Aggregation")
+data_raw <- read.csv(file = "C:/Amazon data challenge/Processed_Data/out_4scores_3-6.csv")
+data_rawsort <- data_raw[order(data_raw$zip5, data_raw$Date, data_raw$Time),]
+l1 = dim(data_rawsort)[1]
+l2 = dim(data_rawsort)[2]
+sum(data_rawsort$impact_score_.1)
+sum(data_rawsort$impact_score_0.52)
+sum(data_rawsort$impact_score_35)
+# data_rawsort$impact_score_.1 <- as.numeric(data_rawsort$true_impact_score==-1)
+# data_rawsort$impact_score_0.52 <- as.numeric((data_rawsort$true_impact_score>0.51) & (data_rawsort$true_impact_score<0.53))
+# data_rawsort$impact_score_35 <- as.numeric(data_rawsort$true_impact_score==35)
+
+data_agg = NULL
+i = 1
+while (i <= l1) {
+  D <- data_rawsort[i,]
+  j = 1
+  while ((!is.na(data_rawsort$zip5[i+j])) & 
+         (data_rawsort$zip5[i]==data_rawsort$zip5[i+j]) &
+         (data_rawsort$Date[i]==data_rawsort$Date[i+j])) {
+    
+    D = D + data_rawsort[i+j,]
+    j = j+1
+  }
+  D = D/j
+  # if (D[l2-2] > 0.5) {
+  #   D[l2-3] = -1
+  # } else if (D[l2-1] > 0.5) {
+  #   D[l2-3] = 0.517241379
+  # } else if (D[l2] > 0.5) {
+  #   D[l2-3] = 35
+  # } else if ((D[l2-2]+D[l2-1])> 0.5) {
+  #   D[l2-3] = 0.517241379
+  # } else if (sum(as.numeric(D[c(l2-2,l2-1,l2)]))!=0) {
+  #   indexes <- as.numeric(D[c(l2-2,l2-1,l2)]) * j
+  #   ret <- indexes *  c(-1,0.517241379,35)
+  #   j_mod <- sum(indexes)
+  #   D[l2-3] <- (D[l2-3]*j-sum(ret))/(j-j_mod)
+  # }
+  # D$Date <- data_rawsort$Date[i]
+  data_agg <- rbind(data_agg,D)
+  i = i+j
+  print(i/l1*100)
+}
+# data <- data_agg[,-c(1,3,4,5,6)]
+
+# data <- data_agg[,-c(1,3,4,5,6)]
+
+data <- data_agg
+
+Identifiers <- data[,c(l2-2,l2-1,l2)]
+i=1
+outlier_pred <- foreach(i = 1:nrow(data), .combine = c) %dopar% {
+  ID <- Identifiers[i,]
+  if (ID[1] > 0.5) {
+    outlier_pred = -1
+  } else if (ID[2] > 0.5) {
+    outlier_pred = 0.517241379
+  } else if (ID[3] > 0.5) {
+    outlier_pred = 35
+  } else if ((ID[1]+ID[2])> 0.5) {
+    outlier_pred = 0.517241379
+  } else if ((ID[1]+ID[3])> 0.7) {
+    outlier_pred = -1
+  } else if ((ID[2]+ID[3])> 0.7) {
+    outlier_pred = 0.517241379
+  } else {
+    outlier_pred = 0
+  }
+  outlier_pred
+}
+data <- data[,c(-l2,-l2+1,-l2+2)]
+data <- data[,c(-2,-3,-4,-5)]
+data <- cbind(data,outlier_pred)
+data <- data[order(data$zip5,data$Date),]
+
+N1 <- data$true_impact_score == -1
+N2 <- (data$true_impact_score < 0.53) & (data$true_impact_score > 0.51) 
+N3 <- data$true_impact_score == 35
+# N1 <- data_rawsort$impact_score == -1
+# N2 <- data_rawsort$impact_score == 0.517241379
+# N3 <- data_rawsort$impact_score == 35
+sum(N1)
+sum(N2)
+sum(N3)
+outliers <- N1|N2|N3
+sum(outliers)
+data_wo_outlier <- data[!outliers,]
+data_outlier <- data[outliers,]
+
+write.csv(data, file = "Data_DayAve4_v2.csv")
+# write.csv(data_rawsort, file = "Data_RawSort.csv")
+write.csv(data_outlier, file = "Data_DayAve4_outlier_v2.csv")
+write.csv(data_wo_outlier, file = "Data_DayAve4_wo_outlier_v2.csv")
+
+
+
+####
+#### Time Series
+####
+library(readr)
+library(xts)
+library(forecast)
+
+######Read DATA######
+
+Ave4_wo<-read.csv("../Data_DayAve4_wo_outlier_v2.csv")
+
+### Extract Impact score###
+timeseriestotal=data.frame(Ave4_wo$Date,Ave4_wo$true_impact_score)
+colnames(timeseriestotal)<-c("Date","impact_score")
+
+
+##Fit model###
+fitfinal<-auto.arima(timeseriestotal$impact_score,stepwise = FALSE, approximation = FALSE,seasonal = TRUE)
+checkresiduals(fitfinal)
+output<-as.data.frame(fitted(fitfinal))
+
+## plot ###
+plot(Ave4_wo$Date,Ave4_wo$true_impact_score, cex = 0.2,xlab="Time(Days from 2017-01-01)",ylab = "impact_score")
+points(Ave4_wo$Date,output$x, cex = 0.2,col = "red")
+
+## output ##
+write.csv(output,"../time_wo_3-8.csv",row.names = FALSE)
+
+## dorecast ##
+out2019<-read.csv("../Data2019_DayAve4_wo_outlier_v2.csv")
+forecast2019<-forecast(fitfinal,h=dim(out2019)[1],level=c(99.5))
+time_wo_2019<-as.data.frame(forecast2019$fitted)
+write.csv(time_wo_2019,"../time_wo_2019.csv",row.names = FALSE)
+
+
+
+
+
+
+####
+#### Correlation Analysis
+####
+
+plot_original_data <- hist(final1718$impact_score,xlim = c(0,35) ,main = paste("Histogram of" , "2017-2018 impact scores"),xlab = "impact score")
+data1718_firstclean <- data1718_final_clean_3[which(data1718_final_clean_3$impact_score_2 != -1),]
+plot_first_cleandata <-hist(data1718_firstclean$impact_score,xlim = c(0,35) ,main = paste("Histogram of" , "2017-2018 impact scores"),xlab = "impact score")
+plot_second_cleandata <-hist(delresult3_5$impact_score,xlim = c(0,35) ,main = paste("Histogram of" , "2017-2018 impact scores"),xlab = "impact score")
+Data_DayAve4_meanzipc <- Data_DayAve4_meanzip[,-c(1:4,91)]
+a<-cor(Data_DayAve4_meanzipc)
+correlation <- as.data.frame(a)
+library(dplyr)
+library(tidyr)
+b <- cor(Data_DayAve4_meanzipc) %>%
+  as.data.frame() %>%
+  mutate(var1 = rownames(.)) %>%
+  gather(var2, value, -var1) %>%
+  arrange(desc(value)) %>%
+  group_by(value) %>%
+  filter(row_number()==1)
+b[which(b$var1 == "impact_score"),]
+ytime_nooutliers <- Data_DayAve4_meanzipc[which(Data_DayAve4_meanzipc$Y_Time > 1),]
+c <- ytime_nooutliers[,c("impact_score","Y_Time","Ymeans","Ozone_Mixing_Ratio_isobaric","MSLP_Eta_model_reduction_msl","Pressure_surface","Pressure_reduced_to_MSL_msl","Pressure_height_above_ground","Per_cent_frozen_precipitation_surface")]
+pairs(c[,1:8])
+plot(ytime_nooutliers$Y_Time,ytime_nooutliers$impact_score,xlab = "Y_Time",ylab = "impact_score")
+plot(Data_DayAve4_meanzipc$Ymeans,Data_DayAve4_meanzipc$impact_score,xlab = "Ymeans",ylab = "impact_score")
+plot(Data_DayAve4_meanzipc$Ozone_Mixing_Ratio_isobaric,Data_DayAve4_meanzipc$impact_score,xlab = "Ozone_Mixing_Ratio_isobaric",ylab = "impact_score")
+
+####
+#### Geographical Clustering Zipcode
+####
+
+xy_data17 <- final_2017[,c(5,6)]
+zipcode17 <- final_2017[,102]
+Graphical_data <- unique(cbind(zipcode17,xy_data17))
+Graphical_data
+head(Graphical_data)
+##outliers_zipcode <-c(20166,3063,8085,8512,8817,18707,29418,30144,32218,32221,33182,40218,
+                     ###43207,48150,53703,53718,60449,66102,66219,67337,77090,80216,89115,89434,
+                     ##95837,97124,98421)
+##for (i in outliers_zipcode) {
+  ##Graphical_data <- Graphical_data[Graphical_data$zipcode17 != i,]
+##}
+Graphical_data
+library(ggplot2)
+library(cluster)
+library(fpc)
+set.seed(20)
+Graphical_Cluster10 <- kmeans(Graphical_data[, 2:3], 10, nstart = 25)
+Graphical_Cluster12 <- kmeans(Graphical_data[, 2:3], 12, nstart = 30)
+Graphical_Cluster10
+table(Graphical_Cluster10$cluster, Graphical_data$zipcode17)
+str(table(Graphical_Cluster10$cluster, Graphical_data$zipcode17))
+Graphical_Cluster10$cluster <- as.factor(Graphical_Cluster10$cluster)
+ggplot(Graphical_data, aes(x, y, color = Graphical_Cluster10$cluster)) + geom_point()
+table(Graphical_data$zipcode17,Graphical_Cluster10$cluster)
+as.data.frame(table(Graphical_data$zipcode17,Graphical_Cluster10$cluster))
+cluster1 <-nona_noout1718[which(nona_noout1718$zip5 == 80216| nona_noout1718$zip5 == 85043| nona_noout1718$zip5 == 85338| nona_noout1718$zip5 == 85353),]
+cluster2 <-nona_noout1718[which(nona_noout1718$zip5 == 97124| nona_noout1718$zip5 == 98032| nona_noout1718$zip5 == 98327| nona_noout1718$zip5 == 98390| nona_noout1718$zip5 == 98421),]
+cluster3 <-nona_noout1718[which(nona_noout1718$zip5 == 89030| nona_noout1718$zip5 == 89115| nona_noout1718$zip5 == 89434| nona_noout1718$zip5 == 89506 | nona_noout1718$zip5 == 91752| nona_noout1718$zip5 == 92374 | nona_noout1718$zip5 == 92376
+                              | nona_noout1718$zip5 == 92408 | nona_noout1718$zip5 == 92551 | nona_noout1718$zip5 == 95304 | nona_noout1718$zip5 == 95363 | nona_noout1718$zip5 == 95391 | nona_noout1718$zip5 == 95837),]
+cluster4 <-nona_noout1718[which(nona_noout1718$zip5 == 32218|nona_noout1718$zip5 == 32221| nona_noout1718$zip5 == 33182|nona_noout1718$zip5 == 33572 | nona_noout1718$zip5 == 33811),]
+cluster5 <-nona_noout1718[which(nona_noout1718$zip5 == 2722| nona_noout1718$zip5 == 3063| nona_noout1718$zip5 == 7008| nona_noout1718$zip5 == 8085 | nona_noout1718$zip5 == 8512| nona_noout1718$zip5 == 8518 | nona_noout1718$zip5 == 8691 | nona_noout1718$zip5 == 8817 | nona_noout1718$zip5 == 17013 | nona_noout1718$zip5 == 17015 | nona_noout1718$zip5 == 17339 | nona_noout1718$zip5 == 18031 | nona_noout1718$zip5 == 18045 | nona_noout1718$zip5 == 18202
+                                | nona_noout1718$zip5 == 18640| nona_noout1718$zip5 == 18707 | nona_noout1718$zip5 == 19709 | nona_noout1718$zip5 == 20166| nona_noout1718$zip5 == 21224| nona_noout1718$zip5 == 23803),]
+cluster6 <-nona_noout1718[which(nona_noout1718$zip5 == 53144| nona_noout1718$zip5 == 53703| nona_noout1718$zip5 == 53718| nona_noout1718$zip5 == 55379 | nona_noout1718$zip5 == 60433| nona_noout1718$zip5 == 60436 | nona_noout1718$zip5 == 60446 | nona_noout1718$zip5 == 60449 | nona_noout1718$zip5 == 62025 ),]
+cluster7 <-nona_noout1718[which(nona_noout1718$zip5 == 28214| nona_noout1718$zip5 == 29172| nona_noout1718$zip5 == 29303| nona_noout1718$zip5 == 29418 | nona_noout1718$zip5 == 30144| nona_noout1718$zip5 == 30291 | nona_noout1718$zip5 == 30517 | nona_noout1718$zip5 == 37090| nona_noout1718$zip5 == 37127| nona_noout1718$zip5 == 37321| nona_noout1718$zip5 == 37421),]
+cluster8 <-nona_noout1718[which(nona_noout1718$zip5 == 75019| nona_noout1718$zip5 == 75241| nona_noout1718$zip5 == 76177| nona_noout1718$zip5 == 77090 | nona_noout1718$zip5 == 78154| nona_noout1718$zip5 == 78666),]
+cluster9 <-nona_noout1718[which(nona_noout1718$zip5 == 40165| nona_noout1718$zip5 == 40218| nona_noout1718$zip5 == 40511| nona_noout1718$zip5 == 41048 | nona_noout1718$zip5 == 42718| nona_noout1718$zip5 == 43062| nona_noout1718$zip5 == 43125| nona_noout1718$zip5 == 43207| nona_noout1718$zip5 == 46075 | nona_noout1718$zip5 == 46168| nona_noout1718$zip5 == 46231| nona_noout1718$zip5 == 47130| nona_noout1718$zip5 == 48150 ),]
+cluster10 <-nona_noout1718[which( nona_noout1718$zip5 == 66030| nona_noout1718$zip5 == 66102| nona_noout1718$zip5 == 66219 | nona_noout1718$zip5 == 67337),]
+write.csv(cluster10, '/Users/kaili/Desktop/Cluster10_training data set/cluster10.csv', row.names=T)
+
+
+
+
+
+
+
+
+####
+#### Weather Model - LASSO for Training
+####
+
+rm(list = ls())
+library(glmnet)
+library(foreach)
+library(parallel)
+library(doParallel)
+library(class)
+library(dplyr)
+numCores <- detectCores()
+registerDoParallel(numCores)
+
+Y_t <- read.csv(file = "C:/Amazon data challenge/Processed_Data/time1718_3-6.csv")
+# Y_t <- delout_time
+RFClass <- read.csv("C:/Amazon data challenge/Analysis/Data Aggregation/Data_DayAve4_wo_outlier.csv")
+data <- cbind(RFClass,Y_t)[,-1]
+
+data1718_raw <- read.csv("C:/Amazon data challenge/Orginal Datasets/impact_scores/impact_score Summary 2017-2018.csv")
+data1718 <- data1718_raw[,-1]
+
+## Process of Raw 1718 Data
+
+LL = ncol(data1718)
+data1718 <- data1718[,c(LL-1,LL)]
+data1718 <- data1718[order(data1718$zip5),]
+n <- nrow(data1718) # total number of observations
+i = 1
+
+zips <- data1718$zip5
+Ys <- data1718$impact_score
+Ymeans = NULL
+while (i <= n) {
+  zip <- zips[i]
+  j = sum(zips==zip)
+  Ymean = mean(Ys[seq(i,i+j-1)])
+  Ymeans[seq(i,i+j-1)] <- Ymean
+  i = i+j
+}
+data1718raw_MeanZip <- cbind(data1718,Ymeans)
+
+## Process of 1718 Data
+
+newdata <- data
+data$impact_score <- newdata$x
+data$x <- newdata$impact_score
+colnames(data)[dim(data)[2]-1] <- "Y_Time"
+colnames(data)[dim(data)[2]] <- "impact_score"
+
+DataSet <- data
+data <- DataSet
+
+# create Y_mean based on zipcode
+data_meanzip <- data[order(data$zip5),]
+n <- nrow(data_meanzip) # total number of observations
+i = 1
+zips <- data_meanzip$zip5
+Ys <- data_meanzip$impact_score
+Ymeans = NULL
+while (i <= n) {
+  zip <- data_meanzip$zip5[i]
+  I <- which(data1718raw_MeanZip$zip5==zip)[1]
+  Ymeans[i] = data1718raw_MeanZip$Ymeans[I]
+  i = i+1
+}
+l = ncol(data_meanzip)
+data_meanzip <- cbind(data_meanzip[,c(-l,-(l-1),-(l-2))],Ymeans, data_meanzip[,c(l-2,(l-1),l)])
+# write.csv(data_meanzip, file = "C:/Amazon data challenge/Analysis/Data Aggregation/Data_DayAve4_meanzip.csv")
+#Split into 10 clusters and calculate the MSE 
+# Might need to model 80218 by itself
+cluster1 <- data_meanzip[which(data_meanzip$zip5 == 80216| data_meanzip$zip5 == 85043| data_meanzip$zip5 == 85338| data_meanzip$zip5 == 85353),]
+cluster2 <-data_meanzip[which(data_meanzip$zip5 == 97124| data_meanzip$zip5 == 98032| data_meanzip$zip5 == 98327| data_meanzip$zip5 == 98390| data_meanzip$zip5 == 98421),]
+cluster3 <-data_meanzip[which(data_meanzip$zip5 == 89030| data_meanzip$zip5 == 89115| data_meanzip$zip5 == 89434| data_meanzip$zip5 == 89506 | data_meanzip$zip5 == 91752| data_meanzip$zip5 == 92374 | data_meanzip$zip5 == 92376
+                              | data_meanzip$zip5 == 92408 | data_meanzip$zip5 == 92551 | data_meanzip$zip5 == 95304 | data_meanzip$zip5 == 95363 | data_meanzip$zip5 == 95391 | data_meanzip$zip5 == 95837),]
+cluster4 <-data_meanzip[which(data_meanzip$zip5 == 32218|data_meanzip$zip5 == 32221| data_meanzip$zip5 == 33182|data_meanzip$zip5 == 33572 | data_meanzip$zip5 == 33811),]
+cluster5 <-data_meanzip[which(data_meanzip$zip5 == 2722| data_meanzip$zip5 == 3063| data_meanzip$zip5 == 7008| data_meanzip$zip5 == 8085 | data_meanzip$zip5 == 8512| data_meanzip$zip5 == 8518 | data_meanzip$zip5 == 8691 | data_meanzip$zip5 == 8817 | data_meanzip$zip5 == 17013 | data_meanzip$zip5 == 17015 | data_meanzip$zip5 == 17339 | data_meanzip$zip5 == 18031 | data_meanzip$zip5 == 18045 | data_meanzip$zip5 == 18202
+                              | data_meanzip$zip5 == 18640| data_meanzip$zip5 == 18707 | data_meanzip$zip5 == 19709 | data_meanzip$zip5 == 20166| data_meanzip$zip5 == 21224| data_meanzip$zip5 == 23803| data_meanzip$zip5 == 23836),]
+cluster6 <-data_meanzip[which(data_meanzip$zip5 == 53144| data_meanzip$zip5 == 53703| data_meanzip$zip5 == 53718| data_meanzip$zip5 == 55379 | data_meanzip$zip5 == 60433| data_meanzip$zip5 == 60436 | data_meanzip$zip5 == 60446 | data_meanzip$zip5 == 60449 | data_meanzip$zip5 == 62025 ),]
+cluster7 <-data_meanzip[which(data_meanzip$zip5 == 28214| data_meanzip$zip5 == 29172| data_meanzip$zip5 == 29303| data_meanzip$zip5 == 29418 | data_meanzip$zip5 == 30144| data_meanzip$zip5 == 30291 | data_meanzip$zip5 == 30517 | data_meanzip$zip5 == 37090| data_meanzip$zip5 == 37127| data_meanzip$zip5 == 37321| data_meanzip$zip5 == 37421),]
+cluster8 <-data_meanzip[which(data_meanzip$zip5 == 75019| data_meanzip$zip5 == 75241| data_meanzip$zip5 == 76177| data_meanzip$zip5 == 77090 | data_meanzip$zip5 == 78154| data_meanzip$zip5 == 78666),]
+cluster9 <-data_meanzip[which(data_meanzip$zip5 == 40165| data_meanzip$zip5 == 40218| data_meanzip$zip5 == 40511| data_meanzip$zip5 == 41048 | data_meanzip$zip5 == 42718| data_meanzip$zip5 == 43062| data_meanzip$zip5 == 43125| data_meanzip$zip5 == 43207| data_meanzip$zip5 == 46075 | data_meanzip$zip5 == 46168| data_meanzip$zip5 == 46231| data_meanzip$zip5 == 47130| data_meanzip$zip5 == 48150 ),]
+cluster10 <-data_meanzip[which( data_meanzip$zip5 == 66030| data_meanzip$zip5 == 66102| data_meanzip$zip5 == 66219 | data_meanzip$zip5 == 67337),]
+
+clusters <- rbind(cluster1, cluster2, cluster3, cluster4, cluster5, cluster6, cluster7, cluster8, cluster9, cluster10)
+Ns <- c(nrow(cluster1),nrow(cluster2),nrow(cluster3), nrow(cluster4),nrow(cluster5), nrow(cluster6), nrow(cluster7), nrow(cluster8), nrow(cluster9), nrow(cluster10))
+NNs <- 0
+for (i in 1:length(Ns)) {
+  NNs[i+1] = sum(Ns[seq(1,i)])
+}
+data1718_meanzip <- data_meanzip
+
+
+data_pred_global <- foreach (i = 1:10, .combine=rbind) %dopar% {
+  library(glmnet)
+  N <- seq((NNs[i]+1), NNs[i+1])
+  cluster <- clusters[N,]
+  
+  data_train = cluster
+  data_test = cluster
+  X <- data_train[,c(-seq(1,3),-ncol(data_train),-ncol(data_train)+2)]
+  Y <- data_train[,ncol(data_train)]
+  CV <- cv.glmnet(as.matrix(X), Y, alpha = 1, nlambda = 100)
+  # plot(CV)
+  # fit = glmnet(x=as.matrix(X), y=Y, alpha=1, lambda = CV$lambda.min)
+  X_new <- X
+  pred <- predict(CV, as.matrix(X_new), s = CV$lambda.min, alpha = 1)
+  data_pred <- cbind(data_test$Date, data_test$zip5, pred)
+  
+
+}
+
+colnames(data_pred_global)[1] <- "Date"
+colnames(data_pred_global)[2] <- "zip5"
+colnames(data_pred_global)[3] <- "impact_score"
+
+
+data_outliers_readin <- read.csv("C:/Amazon data challenge/Analysis/Data Aggregation/Data_DayAve4_outlier.csv")
+data_outliers <- data_outliers_readin[,c(3,ncol(data_outliers_readin)-1,ncol(data_outliers_readin))]
+colnames(data_outliers)[3] <- "impact_score"
+Predictions <- rbind(as.data.frame(data_pred_global),data_outliers)
+Predictions <- Predictions[order(Predictions$Date, Predictions$zip5),]
+pred_dates <- Predictions$Date
+pred_zips <- Predictions$zip5
+
+l2 = as.integer(dim(data1718)[2])
+# data <- data[,c(-1,-2,-3,-5,-6,-7,-8,-(l2-1))]
+# dates2018 <- as.Date(data1718$date_key)
+dates <- as.Date(as.character(data1718$date_key), format = "%m/%d/%Y")
+# dates <- NULL
+# dates <- foreach (i = 1:dim(data1718)[1], .combine = c) %dopar% {
+#   ifelse(is.na(dates2017[i]), data1718[i] <- dates2018[i], data1718[i] <- dates2017[i])
+# }
+data1718[,1] <- (as.numeric(dates)-min(as.numeric(dates)))
+
+
+
+i=1
+MSEs <- foreach(i = 1:length(pred_dates) , .combine = rbind) %dopar% {
+  truevalue <- data1718$impact_score[(data1718$date_key==pred_dates[i]) & (data1718$zip5==pred_zips[i])]
+  MSE = (Predictions$impact_score[i]-truevalue)^2
+  cbind(truevalue,MSE)
+}
+YYs <- MSEs[,1]
+RMSE = mean(MSEs[,2])^0.5
+Y <- YYs
+dates <- pred_dates
+plot(dates,Y)
+
+points(dates,Predictions$impact_score, pch="*", col="red")
+
+
+
+
+
+####
+#### Weather Model - LASSO for Prediction
+####
+
+rm(list = ls())
+library(glmnet)
+library(foreach)
+library(parallel)
+library(doParallel)
+library(class)
+library(dplyr)
+numCores <- detectCores()
+registerDoParallel(numCores)
+
+Y_t <- read.csv(file = "C:/Amazon data challenge/Processed_Data/time1718_3-8.csv")
+# Y_t <- delout_time
+RFClass <- read.csv("C:/Amazon data challenge/Analysis/Data Aggregation/Data_DayAve4_wo_outlier_v2.csv")[,-92]
+data <- cbind(RFClass,Y_t)[,-1]
+Y_t19 <- read.csv(file = "C:/Amazon data challenge/Processed_Data/time_wo_2019(2).csv")
+data19_readin <- read.csv("C:/Amazon data challenge/Analysis/Data Aggregation/Data2019_DayAve4_wo_outlier_v2.csv")
+data1718_raw <- read.csv("C:/Amazon data challenge/Analysis/Data Aggregation/Data1718Raw_DayAve4_wo_outlier.csv")
+data1718 <- data1718_raw[,-1]
+
+## Process of Raw 1718 Data
+
+LL = ncol(data1718)
+data1718 <- data1718[,c(LL-1,LL)]
+data1718 <- data1718[order(data1718$zip5),]
+n <- nrow(data1718) # total number of observations
+i = 1
+
+zips <- data1718$zip5
+Ys <- data1718$impact_score
+Ymeans = NULL
+while (i <= n) {
+  zip <- zips[i]
+  j = sum(zips==zip)
+  Ymean = mean(Ys[seq(i,i+j-1)])
+  Ymeans[seq(i,i+j-1)] <- Ymean
+  i = i+j
+}
+data1718raw_MeanZip <- cbind(data1718,Ymeans)
+
+## Process of 1718 Data
+
+newdata <- data
+data$impact_score <- newdata$x
+data$x <- newdata$impact_score
+colnames(data)[dim(data)[2]-1] <- "Y_Time"
+colnames(data)[dim(data)[2]] <- "impact_score"
+
+DataSet <- data
+data <- DataSet
+
+# create Y_mean based on zipcode
+data_meanzip <- data[order(data$zip5),]
+n <- nrow(data_meanzip) # total number of observations
+i = 1
+zips <- data_meanzip$zip5
+Ys <- data_meanzip$impact_score
+Ymeans = NULL
+while (i <= n) {
+  zip <- data_meanzip$zip5[i]
+  I <- which(data1718raw_MeanZip$zip5==zip)[1]
+  Ymeans[i] = data1718raw_MeanZip$Ymeans[I]
+  i = i+1
+}
+l = ncol(data_meanzip)
+data_meanzip <- cbind(data_meanzip[,c(-l,-(l-1),-(l-2))],Ymeans, data_meanzip[,c(l-2,(l-1),l)])
+# write.csv(data_meanzip, file = "C:/Amazon data challenge/Analysis/Data Aggregation/Data_DayAve4_meanzip.csv")
+#Split into 10 clusters and calculate the MSE 
+# Might need to model 80218 by itself
+cluster1 <- data_meanzip[which(data_meanzip$zip5 == 80216| data_meanzip$zip5 == 85043| data_meanzip$zip5 == 85338| data_meanzip$zip5 == 85353),]
+cluster2 <-data_meanzip[which(data_meanzip$zip5 == 97124| data_meanzip$zip5 == 98032| data_meanzip$zip5 == 98327| data_meanzip$zip5 == 98390| data_meanzip$zip5 == 98421),]
+cluster3 <-data_meanzip[which(data_meanzip$zip5 == 89030| data_meanzip$zip5 == 89115| data_meanzip$zip5 == 89434| data_meanzip$zip5 == 89506 | data_meanzip$zip5 == 91752| data_meanzip$zip5 == 92374 | data_meanzip$zip5 == 92376
+                              | data_meanzip$zip5 == 92408 | data_meanzip$zip5 == 92551 | data_meanzip$zip5 == 95304 | data_meanzip$zip5 == 95363 | data_meanzip$zip5 == 95391 | data_meanzip$zip5 == 95837),]
+cluster4 <-data_meanzip[which(data_meanzip$zip5 == 32218|data_meanzip$zip5 == 32221| data_meanzip$zip5 == 33182|data_meanzip$zip5 == 33572 | data_meanzip$zip5 == 33811),]
+cluster5 <-data_meanzip[which(data_meanzip$zip5 == 2722| data_meanzip$zip5 == 3063| data_meanzip$zip5 == 7008| data_meanzip$zip5 == 8085 | data_meanzip$zip5 == 8512| data_meanzip$zip5 == 8518 | data_meanzip$zip5 == 8691 | data_meanzip$zip5 == 8817 | data_meanzip$zip5 == 17013 | data_meanzip$zip5 == 17015 | data_meanzip$zip5 == 17339 | data_meanzip$zip5 == 18031 | data_meanzip$zip5 == 18045 | data_meanzip$zip5 == 18202
+                              | data_meanzip$zip5 == 18640| data_meanzip$zip5 == 18707 | data_meanzip$zip5 == 19709 | data_meanzip$zip5 == 20166| data_meanzip$zip5 == 21224| data_meanzip$zip5 == 23803| data_meanzip$zip5 == 23836),]
+cluster6 <-data_meanzip[which(data_meanzip$zip5 == 53144| data_meanzip$zip5 == 53703| data_meanzip$zip5 == 53718| data_meanzip$zip5 == 55379 | data_meanzip$zip5 == 60433| data_meanzip$zip5 == 60436 | data_meanzip$zip5 == 60446 | data_meanzip$zip5 == 60449 | data_meanzip$zip5 == 62025 ),]
+cluster7 <-data_meanzip[which(data_meanzip$zip5 == 28214| data_meanzip$zip5 == 29172| data_meanzip$zip5 == 29303| data_meanzip$zip5 == 29418 | data_meanzip$zip5 == 30144| data_meanzip$zip5 == 30291 | data_meanzip$zip5 == 30517 | data_meanzip$zip5 == 37090| data_meanzip$zip5 == 37127| data_meanzip$zip5 == 37321| data_meanzip$zip5 == 37421),]
+cluster8 <-data_meanzip[which(data_meanzip$zip5 == 75019| data_meanzip$zip5 == 75241| data_meanzip$zip5 == 76177| data_meanzip$zip5 == 77090 | data_meanzip$zip5 == 78154| data_meanzip$zip5 == 78666),]
+cluster9 <-data_meanzip[which(data_meanzip$zip5 == 40165| data_meanzip$zip5 == 40218| data_meanzip$zip5 == 40511| data_meanzip$zip5 == 41048 | data_meanzip$zip5 == 42718| data_meanzip$zip5 == 43062| data_meanzip$zip5 == 43125| data_meanzip$zip5 == 43207| data_meanzip$zip5 == 46075 | data_meanzip$zip5 == 46168| data_meanzip$zip5 == 46231| data_meanzip$zip5 == 47130| data_meanzip$zip5 == 48150 ),]
+cluster10 <-data_meanzip[which( data_meanzip$zip5 == 66030| data_meanzip$zip5 == 66102| data_meanzip$zip5 == 66219 | data_meanzip$zip5 == 67337),]
+
+clusters <- rbind(cluster1, cluster2, cluster3, cluster4, cluster5, cluster6, cluster7, cluster8, cluster9, cluster10)
+Ns <- c(nrow(cluster1),nrow(cluster2),nrow(cluster3), nrow(cluster4),nrow(cluster5), nrow(cluster6), nrow(cluster7), nrow(cluster8), nrow(cluster9), nrow(cluster10))
+NNs <- 0
+for (i in 1:length(Ns)) {
+  NNs[i+1] = sum(Ns[seq(1,i)])
+}
+data1718_meanzip <- data_meanzip
+
+
+
+
+## Process of 19 Data
+
+data19 <- cbind(data19_readin,Y_t19)[,c(-1)]
+colnames(data19)[dim(data19)[2]-1] <- "impact_score"
+newdata19 <- data19
+data19$impact_score <- newdata19$x
+data19$x <- newdata19$impact_score
+colnames(data19)[dim(data19)[2]-1] <- "Y_Time"
+colnames(data19)[dim(data19)[2]] <- "impact_score"
+
+DataSet19 <- data19
+# create Y_mean based on zipcode
+data_meanzip <- data19[order(data19$zip5),]
+n <- nrow(data_meanzip) # total number of observations
+i = 1
+zips <- data_meanzip$zip5
+# Ys <- data_meanzip$impact_score
+Ymeans = NULL
+while (i <= n) {
+  zip <- data_meanzip$zip5[i]
+  I <- which(data1718raw_MeanZip$zip5==zip)[1]
+  Ymeans[i] = data1718raw_MeanZip$Ymeans[I]
+  i = i+1
+}
+l = ncol(data_meanzip)
+data_meanzip <- cbind(data_meanzip[,c(-l,-(l-1),-(l-2))],Ymeans, data_meanzip[,c(l-2,(l-1),l)])
+
+cluster1 <- data_meanzip[which(data_meanzip$zip5 == 80216| data_meanzip$zip5 == 85043| data_meanzip$zip5 == 85338| data_meanzip$zip5 == 85353),]
+cluster2 <-data_meanzip[which(data_meanzip$zip5 == 97124| data_meanzip$zip5 == 98032| data_meanzip$zip5 == 98327| data_meanzip$zip5 == 98390| data_meanzip$zip5 == 98421),]
+cluster3 <-data_meanzip[which(data_meanzip$zip5 == 89030| data_meanzip$zip5 == 89115| data_meanzip$zip5 == 89434| data_meanzip$zip5 == 89506 | data_meanzip$zip5 == 91752| data_meanzip$zip5 == 92374 | data_meanzip$zip5 == 92376
+                              | data_meanzip$zip5 == 92408 | data_meanzip$zip5 == 92551 | data_meanzip$zip5 == 95304 | data_meanzip$zip5 == 95363 | data_meanzip$zip5 == 95391 | data_meanzip$zip5 == 95837),]
+cluster4 <-data_meanzip[which(data_meanzip$zip5 == 32218|data_meanzip$zip5 == 32221| data_meanzip$zip5 == 33182|data_meanzip$zip5 == 33572 | data_meanzip$zip5 == 33811),]
+cluster5 <-data_meanzip[which(data_meanzip$zip5 == 2722| data_meanzip$zip5 == 3063| data_meanzip$zip5 == 7008| data_meanzip$zip5 == 8085 | data_meanzip$zip5 == 8512| data_meanzip$zip5 == 8518 | data_meanzip$zip5 == 8691 | data_meanzip$zip5 == 8817 | data_meanzip$zip5 == 17013 | data_meanzip$zip5 == 17015 | data_meanzip$zip5 == 17339 | data_meanzip$zip5 == 18031 | data_meanzip$zip5 == 18045 | data_meanzip$zip5 == 18202
+                              | data_meanzip$zip5 == 18640| data_meanzip$zip5 == 18707 | data_meanzip$zip5 == 19709 | data_meanzip$zip5 == 20166| data_meanzip$zip5 == 21224| data_meanzip$zip5 == 23803| data_meanzip$zip5 == 23836),]
+cluster6 <-data_meanzip[which(data_meanzip$zip5 == 53144| data_meanzip$zip5 == 53703| data_meanzip$zip5 == 53718| data_meanzip$zip5 == 55379 | data_meanzip$zip5 == 60433| data_meanzip$zip5 == 60436 | data_meanzip$zip5 == 60446 | data_meanzip$zip5 == 60449 | data_meanzip$zip5 == 62025 ),]
+cluster7 <-data_meanzip[which(data_meanzip$zip5 == 28214| data_meanzip$zip5 == 29172| data_meanzip$zip5 == 29303| data_meanzip$zip5 == 29418 | data_meanzip$zip5 == 30144| data_meanzip$zip5 == 30291 | data_meanzip$zip5 == 30517 | data_meanzip$zip5 == 37090| data_meanzip$zip5 == 37127| data_meanzip$zip5 == 37321| data_meanzip$zip5 == 37421),]
+cluster8 <-data_meanzip[which(data_meanzip$zip5 == 75019| data_meanzip$zip5 == 75241| data_meanzip$zip5 == 76177| data_meanzip$zip5 == 77090 | data_meanzip$zip5 == 78154| data_meanzip$zip5 == 78666),]
+cluster9 <-data_meanzip[which(data_meanzip$zip5 == 40165| data_meanzip$zip5 == 40218| data_meanzip$zip5 == 40511| data_meanzip$zip5 == 41048 | data_meanzip$zip5 == 42718| data_meanzip$zip5 == 43062| data_meanzip$zip5 == 43125| data_meanzip$zip5 == 43207| data_meanzip$zip5 == 46075 | data_meanzip$zip5 == 46168| data_meanzip$zip5 == 46231| data_meanzip$zip5 == 47130| data_meanzip$zip5 == 48150 ),]
+cluster10 <-data_meanzip[which( data_meanzip$zip5 == 66030| data_meanzip$zip5 == 66102| data_meanzip$zip5 == 66219 | data_meanzip$zip5 == 67337),]
+
+clusters19 <- rbind(cluster1, cluster2, cluster3, cluster4, cluster5, cluster6, cluster7, cluster8, cluster9, cluster10)
+Ns19 <- c(nrow(cluster1),nrow(cluster2),nrow(cluster3), nrow(cluster4),nrow(cluster5), nrow(cluster6), nrow(cluster7), nrow(cluster8), nrow(cluster9), nrow(cluster10))
+NNs19 <- 0
+for (i in 1:length(Ns19)) {
+  NNs19[i+1] = sum(Ns19[seq(1,i)])
+}
+i=1
+data_pred_global <- foreach (i = 1:10, .combine=rbind) %dopar% {
+  library(glmnet)
+  N <- seq((NNs[i]+1), NNs[i+1])
+  N19 <- seq((NNs19[i]+1), NNs19[i+1])
+  cluster <- clusters[N,]
+  cluster19 <- clusters19[N19,]
+  
+  data_train = cluster
+  data_test = cluster19
+  X <- data_train[,c(-seq(1,3),-ncol(data_train),-ncol(data_train)+2)]
+  Y <- data_train[,ncol(data_train)]
+  CV <- cv.glmnet(as.matrix(X), Y, alpha = 1, nlambda = 100)
+  # plot(CV)
+  # fit = glmnet(x=as.matrix(X), y=Y, alpha=1, lambda = CV$lambda.min)
+  X_new <- data_test[,c(-seq(1,3),-ncol(data_test),-ncol(data_test)+2)]
+  pred <- predict(CV, as.matrix(X_new), s = CV$lambda.min, alpha = 1)
+  data_pred <- cbind(data_test$Date, data_test$zip5, pred)
+  
+  
+
+  
+  
+  # plot(Y_new)
+  # points(pred, pch="*", col="red")
+  # MSE <- mean( (Y_new - pred)^2)  
+}
+
+colnames(data_pred_global)[1] <- "Date"
+colnames(data_pred_global)[2] <- "zip5"
+colnames(data_pred_global)[3] <- "impact_score"
+
+data19_outliers_readin <- read.csv("C:/Amazon data challenge/Analysis/Data Aggregation/Data2019_DayAve4_outlier_v2.csv")
+data19_outliers <- data19_outliers_readin[,c(2,ncol(data19_outliers_readin)-1,ncol(data19_outliers_readin))]
+colnames(data19_outliers)[3] <- "impact_score"
+Predictions2019 <- rbind(as.data.frame(data_pred_global),data19_outliers)
+Predictions2019 <- Predictions2019[order(Predictions2019$Date, Predictions2019$zip5),]
+
+
+########
+######  Outlier Prediction
+########
+
+
+
+
+
+final1718 <- read.csv("/Users/andrewsong/Desktop/final1718.csv")
+
+O35 <- final1718 %>% filter (final1718$impact_score %in% c("-1"))
+
+zip_O30 <-final1718 %>% filter (final1718$zip5 %in% c("3063","8085","8512","8817","18707","20166",
+                                                    "29418","30144","32218","32221",
+                                                    "33182","40218","43207","48150","53703",
+                                                    "60449","66102","66219","67337","77090",
+                                                    "80216","89115","89434","95837",
+                                                    "97124","98421"))
+
+
+
+### Zip = 3063  Assign to "-1" in 2019
+zip_O30_3063 <- zip_O30 %>% filter(zip_O30$zip5 == 3063 & zip_O30$Time == 0) 
+
+plot(zip_O30_3063$Date,zip_O30_3063$impact_score)
+
+#zip_O30_3063 <- subset(zip_O30_3063, !(zip_O30_3063$impact_score %in% c("-1","0.517241379")))  
+
+
+
+### Zip = 8085  To Kevin
+zip_O30_8085 <- zip_O30 %>% filter(zip_O30$zip5 == 8085 & zip_O30$Time == 0) 
+
+plot(zip_O30_8085$Date,zip_O30_8085$impact_score)
+
+zip_O30_8085 <- subset(zip_O30_8085, !(zip_O30_8085$impact_score %in% c("-1","0.517241379")))  
+
+### Zip = 8512  To Kevin
+zip_O30_8512 <- zip_O30 %>% filter(zip_O30$zip5 == 8512 & zip_O30$Time == 0) 
+
+plot(zip_O30_8512$Date,zip_O30_8512$impact_score)
+
+zip_O30_8512 <- subset(zip_O30_8512, !(zip_O30_8512$impact_score %in% c("-1","0.517241379")))
+
+### Zip = 8817   To Kevin
+
+zip_O30_8817 <- zip_O30 %>% filter(zip_O30$zip5 == 8817 & zip_O30$Time == 0) 
+
+plot(zip_O30_8817$Date,zip_O30_8817$impact_score)
+
+zip_O30_8817 <- subset(zip_O30_8817, !(zip_O30_8817$impact_score %in% c("-1","0.517241379")))
+
+
+### Zip = 18707  Assign to "-1" in the future
+
+zip_O30_18707 <- zip_O30 %>% filter(zip_O30$zip5 == 18707 & zip_O30$Time == 0) 
+
+plot(zip_O30_18707$Date,zip_O30_18707$impact_score)
+
+
+### Zip = 20166   To Kevin
+
+zip_O30_20166 <- zip_O30 %>% filter(zip_O30$zip5 == 20166 & zip_O30$Time == 0) 
+
+plot(zip_O30_20166$Date,zip_O30_20166$impact_score)
+
+zip_O30_20166 <- subset(zip_O30_20166, !(zip_O30_20166$impact_score %in% c("-1","0.517241379","0.517241379310343")))
+
+
+
+### Zip = 29418   Assign to "-1" in the future
+
+zip_O30_29418 <- zip_O30 %>% filter(zip_O30$zip5 == 29418 & zip_O30$Time == 0) 
+
+plot(zip_O30_29418$Date,zip_O30_29418$impact_score)
+
+#zip_O30_29418 <- subset(zip_O30_29418, !(zip_O30_29418$impact_score %in% c("-1","0.517241379")))
+
+
+### Zip = 30144   To Kevin
+
+zip_O30_30144 <- zip_O30 %>% filter(zip_O30$zip5 == 30144 & zip_O30$Time == 0) 
+
+plot(zip_O30_30144$Date,zip_O30_30144$impact_score) # no pattern -- Ramdom Forest
+
+
+### Zip = 32218    To Kevin
+
+zip_O30_32218 <- zip_O30 %>% filter(zip_O30$zip5 == 32218 & zip_O30$Time == 0) 
+
+plot(zip_O30_32218$Date,zip_O30_32218$impact_score)
+
+zip_O30_32218 <- subset(zip_O30_32218, !(zip_O30_32218$impact_score %in% c("-1","0.517241379")))
+
+
+### Zip = 32221    To Kevin
+
+zip_O30_32221 <- zip_O30 %>% filter(zip_O30$zip5 == 32221 & zip_O30$Time == 0) 
+
+plot(zip_O30_32221$Date,zip_O30_32221$impact_score)
+
+zip_O30_32221 <- subset(zip_O30_32221, !(zip_O30_32221$impact_score %in% c("-1","0.517241379")))
+
+
+
+### Zip = 33182    To Kevin
+
+zip_O30_33182 <- zip_O30 %>% filter(zip_O30$zip5 == 33182 & zip_O30$Time == 0) 
+
+plot(zip_O30_33182$Date,zip_O30_33182$impact_score)
+
+zip_O30_33182 <- subset(zip_O30_33182, !(zip_O30_33182$impact_score %in% c("-1","0.517241379")))
+
+
+
+### Zip = 40218   To Kevin   # no pattern -- Ramdom Forest
+
+zip_O30_40218 <- zip_O30 %>% filter(zip_O30$zip5 == 40218 & zip_O30$Time == 0) 
+
+plot(zip_O30_40218$Date,zip_O30_40218$impact_score)
+
+
+
+### Zip = 43207  To Kevin # pay attention to this one, periodical pattern
+
+zip_O30_43207 <- zip_O30 %>% filter(zip_O30$zip5 == 43207 & zip_O30$Time == 0) 
+
+plot(zip_O30_43207$Date,zip_O30_43207$impact_score)
+
+#zip_O30_43207 <- subset(zip_O30_43207, !(zip_O30_43207$impact_score %in% c("-1","0.517241379")))
+
+
+
+### Zip = 48150   To Kevin
+
+zip_O30_48150 <- zip_O30 %>% filter(zip_O30$zip5 == 48150 & zip_O30$Time == 0) 
+
+plot(zip_O30_48150$Date,zip_O30_48150$impact_score)
+
+zip_O30_48150 <- subset(zip_O30_48150, !(zip_O30_48150$impact_score %in% c("-1","0.517241379")))
+
+
+### Zip = 53703   To Kevin
+
+zip_O30_53703 <- zip_O30 %>% filter(zip_O30$zip5 == 53703 & zip_O30$Time == 0) 
+
+plot(zip_O30_53703$Date,zip_O30_53703$impact_score)
+
+# no pattern -- Ramdom Forest
+
+### Zip = 60449   To Kevin
+
+zip_O30_60449 <- zip_O30 %>% filter(zip_O30$zip5 == 60449 & zip_O30$Time == 0) 
+
+plot(zip_O30_60449$Date,zip_O30_60449$impact_score)
+
+zip_O30_60449 <- subset(zip_O30_60449, !(zip_O30_60449$impact_score %in% c("-1","0.517241379")))
+
+
+### Zip = 66102    To Kevin
+
+zip_O30_66102 <- zip_O30 %>% filter(zip_O30$zip5 == 66102 & zip_O30$Time == 0) 
+
+plot(zip_O30_66102$Date,zip_O30_66102$impact_score)
+
+zip_O30_66102 <- subset(zip_O30_66102, !(zip_O30_66102$impact_score %in% c("-1","0.517241379")))
+
+
+### Zip = 66219  Assign to "-1"
+
+zip_O30_66219 <- zip_O30 %>% filter(zip_O30$zip5 == 66219 & zip_O30$Time == 0) 
+
+plot(zip_O30_66219$Date,zip_O30_66219$impact_score)
+
+# zip_O30_66219 <- subset(zip_O30_66219, !(zip_O30_66219$impact_score %in% c("-1","0.517241379")))
+
+
+### Zip = 67337   To Kevin  
+
+zip_O30_67337 <- zip_O30 %>% filter(zip_O30$zip5 == 67337 & zip_O30$Time == 0) 
+
+plot(zip_O30_67337$Date,zip_O30_67337$impact_score) 
+
+
+### Zip = 77090   To Kevin
+
+zip_O30_77090 <- zip_O30 %>% filter(zip_O30$zip5 == 77090 & zip_O30$Time == 0) 
+
+plot(zip_O30_77090$Date,zip_O30_77090$impact_score)
+
+zip_O30_77090 <- subset(zip_O30_77090, !(zip_O30_77090$impact_score %in% c("-1","0.517241379")))
+
+
+
+### Zip = 80216   To Kevin
+
+zip_O30_80216 <- zip_O30 %>% filter(zip_O30$zip5 == 80216 & zip_O30$Time == 0) 
+
+plot(zip_O30_80216$Date,zip_O30_80216$impact_score)
+
+zip_O30_80216 <- subset(zip_O30_80216, !(zip_O30_80216$impact_score %in% c("-1","0.517241379")))
+
+### Zip = 89115    To Kevin
+
+zip_O30_89115 <- zip_O30 %>% filter(zip_O30$zip5 == 89115 & zip_O30$Time == 0) 
+
+plot(zip_O30_89115$Date,zip_O30_89115$impact_score)
+
+zip_O30_89115 <- subset(zip_O30_89115, !(zip_O30_89115$impact_score %in% c("-1","0.517241379")))
+
+### Zip = 89434   Assign to "-1"
+
+zip_O30_89434 <- zip_O30 %>% filter(zip_O30$zip5 == 89434 & zip_O30$Time == 0) 
+
+plot(zip_O30_89434$Date,zip_O30_89434$impact_score)
+
+# zip_O30_89434 <- subset(zip_O30_89434, !(zip_O30_89434$impact_score %in% c("-1","0.517241379")))
+
+
+### Zip = 95837     To Kevin
+
+zip_O30_95837 <- zip_O30 %>% filter(zip_O30$zip5 == 95837 & zip_O30$Time == 0) 
+
+plot(zip_O30_95837$Date,zip_O30_95837$impact_score)
+
+zip_O30_95837 <- subset(zip_O30_95837, !(zip_O30_95837$impact_score %in% c("-1","0.517241379")))
+
+### Zip = 97124   To Kevin
+
+zip_O30_97124 <- zip_O30 %>% filter(zip_O30$zip5 == 97124 & zip_O30$Time == 0) 
+
+plot(zip_O30_97124$Date,zip_O30_97124$impact_score)  
+
+zip_O30_97124 <- subset(zip_O30_97124, !(zip_O30_97124$impact_score %in% c("-1","0.517241379")))
+
+### Zip = 98421  # Assign to "-1"
+
+zip_O30_98421 <- zip_O30 %>% filter(zip_O30$zip5 == 98421 & zip_O30$Time == 0) 
+
+plot(zip_O30_98421$Date,zip_O30_98421$impact_score)
+
+# zip_O30_98421 <- subset(zip_O30_98421, !(zip_O30_98421$impact_score %in% c("-1","0.517241379")))
+
+pred_2019$impact_score <- ifelse(pred_2019$zip5 %in% c("3063","18707","29418","66219","89434","98421"), pred_2019$impact_score <- -1, pred_2019$impact_score <- "N/A")
+
+
+outlierDataPattern <- rbind(zip_O30_8085,zip_O30_8512,zip_O30_8817,zip_O30_20166,zip_O30_30144,
+                            zip_O30_32218,zip_O30_32221,zip_O30_33182,zip_O30_40218,zip_O30_48150,
+                            zip_O30_60449,zip_O30_66102,zip_O30_67337,zip_O30_77090,zip_O30_80216,
+                            zip_O30_95837,zip_O30_97124)
+
+#write.csv(outlierDataPattern,'/Users/andrewsong/Desktop/outlierDataPattern.csv')
+
+
+#####
+#### Exploratary Data Analysis
+##### 
+
+
+numCores <- detectCores()
+registerDoParallel(numCores)
+
+
+data2017 <- read.csv("/Users/andrewsong/Desktop/Amazon Data challange/Final Data/final_2017.csv")
+impact2017 <- read.csv("/Users/andrewsong/Desktop/Amazon Data challange/Final Data/impact_score_2017.csv")
+
+
+df1 <- impact2017 %>%
+  group_by(date_key) %>%
+  mutate(Avg = mean(impact_score))%>%
+  summarize_all(funs(first))
+
+plot(df$date_key,df$Avg)
+
+df2 <- filter(impact2017, zip5 == "23836")
+plot(df2$date_key,df2$impact_score)
+
+
+
+zip2722 <- data2017 %>% filter(zip5 == "2722") %>% 
+  filter(impact_score > 0.52)%>% filter(Time != 0)
+  
+df2 <- zip2722 %>%
+  group_by(Date) %>%
+  mutate(Avg = mean(impact_score))
+
+# Time ~ Impact Score
+plot(df2$Date,df2$impact_score)
+
+plot(df2$impact_score ~ df2$Dewpoint_temperature_height_above_ground)
+
+fit1 <- lm(impact_score ~X5_Wave_Geopotential_Height_isobaric, data = df2)
+
+cor(df2$impact_score , df2$X5_Wave_Geopotential_Height_isobaric)
+
+mtcars.pca <- prcomp(df2[,c(9:100)], center = TRUE,scale. = TRUE)
+
+#after remove "-1" in impact score
+
+data2017_2 <- data2017 %>% filter(data2017$impact_score != "-1", data2017$impact_score !="0.517241379")
+hist(data2017_2$impact_score)
+qqnorm(data2017_2$impact_score)  # normality checked
+qqline(data2017_2$impact_score)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
