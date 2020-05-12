@@ -1,0 +1,131 @@
+library(ggplot2)
+library(dplyr)
+library(plotly)
+library(plot3D)
+library(Metrics)
+library("scatterplot3d")
+midtermtrain <- read.table(file = "http://www2.isye.gatech.edu/~ymei/7406/midtermtrain.csv", sep=",")
+dim(midtermtrain)
+X1 <- midtermtrain[,1]
+X2 <- midtermtrain[,2]
+
+muhat <- apply(midtermtrain[,3:202], 1, mean)
+Vhat  <- apply(midtermtrain[,3:202], 1, var)
+data0 = data.frame(X1 = X1, X2=X2, muhat = muhat, Vhat = Vhat)
+
+par(mfrow = c(1, 1))
+plot(X1, muhat, xlab = "muhat vs X1")
+plot(X2, muhat, xlab = "muhat vs X2")
+plot(X1, Vhat, xlab = "Vhat vs X1")
+plot(X2, Vhat, xlab = "Vhat vs X1")
+
+
+#scatterplot3d(data0[,1:3],pch = 1)
+with(data0, 
+     scatterplot3d(X1,
+                   X2, 
+                   muhat, 
+                   main="3D plot for muhat",
+                   xlab = "X1",
+                   ylab = "X2",
+                   zlab = "muhat",
+                   pch = 20, color="black"))
+
+
+with(data0, 
+     scatterplot3d(X1,
+                   X2, 
+                   Vhat, 
+                   main="3D plot for Vhat",
+                   xlab = "X1",
+                   ylab = "X2",
+                   zlab = "Vhat",
+                   pch = 19, color="black"))
+
+boxplot(data0$X1,data0$X2, main="Boxplot for Predictors",names = c("X1", "X2") )
+
+boxplot(data0$muhat,data0$Vhat, main="Boxplot for Target Variables",
+        names = c("muhat", "Vhat") )
+
+# For variance:seq(0.04,0.08,0.01) lowest is 0.06  Training error is 675.1458
+span.seq <- seq(0.04,0.09,0.01) 
+k <- 10
+
+folds <- sample(x = 1:k, size = length(data0$X1), replace = TRUE)
+cv.error.mtrx <- matrix(rep(x = NA, times = k * length(span.seq)), 
+                        nrow = length(span.seq), ncol = k)
+
+
+for(i in 1:length(span.seq)) {
+  for(j in 1:k) {
+    loess.fit <- loess(Vhat ~ X1+X2, data = data0[folds != j, ], span = span.seq[i])
+    preds <- predict(object = loess.fit, newdata = data0[folds == j, ])
+    cv.error.mtrx[i, j] <- mean((data0$Vhat[folds == j] - preds)^2, na.rm = TRUE)
+  }
+}
+cv.errors <- rowMeans(cv.error.mtrx)
+best.span.i <- which.min(cv.errors)
+best.span.i
+span.seq[best.span.i]
+
+
+
+plot(x = span.seq, y = cv.errors, type = "l", main = "CV Plot for Vhat")
+points(x = span.seq, y = cv.errors, 
+       pch = 20, cex = 1.75, col = "blue")
+points(x = span.seq[best.span.i], y = cv.errors[best.span.i], 
+       pch = 20, cex = 1, col = "red")
+
+best.loess.fit <- loess(formula = muhat ~ X1+X2, data = data0, 
+                        span = span.seq[best.span.i])
+
+x.seq <- seq(from = min(data0$X1+data0$X2), 
+             to = max(data0$X1+data0$X2), length = 10000 )
+
+plot(x = data0$X1+data0$X2, y = data0$muhat, main = "Best Span Plot")
+lines(x = x.seq, y = predict(object = best.loess.fit, 
+                             newdata = data.frame(x = x.seq)), 
+      col = "red", lwd = 2)
+
+
+
+## for Mu  span = 0.07  train error :1.43293
+fitlo2b <- loess(formula = muhat ~ X1+X2, data = data0,  
+                 span=0.07,control=loess.control(surface="direct"))
+pred_loess <- predict(fitlo2b, data0[,1:2])
+mse(data0$muhat,pred_loess)
+pred2 <- predict(fitlo2b, midtermtest)
+
+
+## for variance   span = 0.06  training error 671.7653
+fitlo2c <- loess(formula = Vhat ~ X1+X2, data = data0,  
+                 span=0.06,control=loess.control(surface="direct"))
+pred_loess_2 <- predict(fitlo2c, data0[,1:2])
+mse(data0$Vhat,pred_loess_2)
+pred3 <- predict(fitlo2c, midtermtest)
+
+
+## export testing data
+pred_test <- data.frame(X1 =midtermtest$X1, X2 = midtermtest$X2, muhat = pred2,  Vhat = pred3)
+
+write.table(pred_test, file="/Users/zexingsong/desktop/S41.csv", 
+            sep=",",  col.name=F, row.name=F)
+
+
+
+midtermtest  <- read.table(file = "http://www2.isye.gatech.edu/~ymei/7406/midtermtest.csv", sep=",")
+colnames(midtermtest) <- c("X1", "X2")
+
+
+
+mse(pred2[1:1960],test[1:1960,3])
+
+
+
+fitlo_var <- loess(muhat ~ X1+X2, data = data0,  span=0.08)
+pred_var <- predict(fitlo_var, data0[,1:2])
+
+mse(pred_var,data0$muhat)
+
+testset  <- read.table(file = "/Users/zexingsong/desktop/S41.csv", sep=",",header = F)
+mse(testset[,4],pred3)
