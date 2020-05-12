@@ -1,0 +1,251 @@
+
+##(a)
+LAST <- c(576, 635,558,578,666,580,555,661,651,605,653,575,545,572,594)
+GPA <- c(3.93,3.3,2.81,3.03,3.44,3.07,3,3.43,3.36,3.13,3.12,2.74,2.76,2.88,2.96)
+
+correlation <- cor(LAST,GPA) #coefficient is 0.5230663
+correlation
+##(b)
+
+m_blank_1 <- matrix(nrow = 1000, ncol = 15)
+
+
+for (i in (1:1000)){
+  for (j in (1:15)){
+    m_blank_1[i,j] <- sample(LAST,15,replace = T)[j]
+  }
+}
+
+
+
+m_blank_2 <- matrix(nrow = 1000, ncol = 15)
+
+for (i in (1:1000)){
+  for (j in (1:15)){
+    m_blank_2[i,j] <- sample(GPA,15,replace = T)[j]
+  }
+}
+
+
+
+cor_list <- vector("numeric",1000)
+
+for (i in (1:1000)){
+  corr <- cor(m_blank_1[i,],m_blank_2[i,])
+  cor_list[i] <- corr
+}
+
+sd(cor_list)  # sd is 0.2682817 for 1000 ramdom SRS
+
+Q_1 <- quantile(cor_list,probs = 0.025)
+Q_4 <- quantile(cor_list,probs = 0.975)
+
+CI_lower <- 2*correlation - Q_4
+CI_Upper <- 2*correlation - Q_1
+
+c(CI_lower,CI_Upper) # (0.533588 1.542246)
+
+## c
+library(mvtnorm)
+library(MASS)
+mean(LAST)
+mean(GPA)
+
+mean_vector <- c(mean(LAST),mean(GPA))
+
+
+df <- data.frame(X1 = LAST, X2 = GPA)
+var_matrix <- var(df)
+
+
+cor_list_2 <- vector("numeric",1000)
+
+for (i in (1:1000)){
+  t_2 <- mvrnorm(n=15, mu = mean_vector, Sigma = var_matrix)
+  cor_list_2[i] <- cor(t_2[,1],t_2[,2])
+  
+}
+
+sd(cor_list_2) # Paraemterr method for Cor = 0.1996563
+
+
+
+
+
+
+library(rpart)
+library(rattle)
+library(rpart.plot)
+library(RColorBrewer)
+mydata <- read.csv("/Users/zexingsong/Desktop/6416 Homework7/spambase.csv",header =  FALSE)
+dim(mydata)
+# There are 58 Variable total and 1 target Variable with 57 Predictors 
+
+table(mydata$V58 == 1)
+table(mydata$V58 == 0)
+#Hence there are 1813 spams and 2788 non-spams
+
+
+# b
+mydata$V58 <- as.factor(mydata$V58)
+mytree <- rpart(mydata$V58 ~ ., data = mydata, method = "class" )
+
+printcp(mytree)
+plotcp(mytree)
+
+
+
+
+fancyRpartPlot(mytree, caption = NULL)
+
+
+
+
+library(randomForest)
+
+n_num <- length(mydata$V58)
+num_train <- round(n_num*0.8)  
+set.seed(6416) 
+
+num_index <- sample(n_num, num_train)
+tree_train <- mydata[num_index,]
+trea_test <- mydata[-num_index,]
+
+model_1 <- randomForest(tree_train$V58 ~ ., data = tree_train, importance = TRUE)
+plot(model_1)
+
+model_2 <- randomForest(tree_train$V58 ~ ., data = tree_train, ntree = 500, importance = TRUE)
+
+predTrain <- predict(model_2, tree_train, type = "class")
+mean(predTrain != tree_train$V58)
+
+predTest <- predict(model_2, trea_test, type = "class")
+mean(trea_test$V58 != predTest)
+
+
+
+mu0<-1
+z=3
+N=100
+a<-rnorm(100,mean=mu0,sd=1)
+sum(a[a>=z])/100
+b<-rnorm(100,mean=z,sd=1)
+b_new<-vector()
+for(i in 1:length(b)){
+  if(b[i]>=z){
+    b_new=c(b_new,exp(-2*b[i]+4))
+  }
+}
+sum(b_new)/100
+
+I1<-vector()
+I2<-vector()
+for(i in 1:500){
+  a<-rnorm(100,mean=mu0,sd=1)
+  b<-rnorm(100,mean=z,sd=1)
+  a1<-vector()
+  b1<-vector()
+  for(m in 1:100){
+    if(a[m]>=z){
+      a1=c(a1,a[m])
+    }
+  }
+  I1[i]=sum(a1)/100
+  for(n in 1:100){
+    if(b[n]>=z){
+      b1=c(b1,exp(-2*b[n]+4))
+    }
+  }
+  I2[i]=sum(b1)/100
+}
+var(I1)
+var(I2)
+
+
+library(phonTools)
+library(grDevices)
+n=20
+Sn=5
+function(theta){
+  2*(theta^(Sn))*((1-theta)^(n-Sn))*(cos(4*pi*theta))^2
+}
+function(T){
+  s=seq(0,1,0.01)
+  theta0=sample(s,1,replace=TRUE)
+  theta=zeros(T)
+  prob=posterior(s)/sum(posterior(s))
+  t=0
+  while(t<T){
+    t=t+1
+    theta_hash=sample(s,1,replace=TRUE,prob=prob)
+    p=posterior(theta_hash)/posterior(theta[t-1])
+    ap=min(1,p)
+    u=runif(1,0,1)
+    if(u<=ap){theta[t]=theta_hash}
+    else{theta[t]=theta[t-1]}
+  }
+  return(theta)
+}
+T=c(100,500,1000,5000)
+s1=seq(0,1,0.01)
+prob=posterior(s1)/sum(posterior(s1))
+true_d=sample(s1,5000,replace=TRUE,p=prob)
+
+gene = MH(5000)
+mycol=adjustcolor("orange",alpha.f=0.4)
+mycol1=adjustcolor("blue",alpha.f=0.4)
+hist(gene,xlim=c(0,1),xlab="theta",ylab="frequency",
+       col=mycol,breaks=30, main='MH')
+hist(true_d,xlim=c(0,1),breaks=30,col=mycol1,add=T)
+legend("topright", legend=c("Generated","True"), 
+         col=c(mycol,mycol1), pt.cex=2, pch=15)
+
+
+mean=sum(value)/length(value)
+sum((value-1/2)^2)/length(value)
+sum
+function(T){
+  s=seq(0,1,0.01)
+  theta0=sample(s,1,replace=TRUE)
+  theta=zeros(T)
+  t=0
+  while(t<=(T-1)){
+    t=t+1
+    prob=exp(-(s-theta[t])^2/(2*(0.1^2)))
+    prob=prob/sum(prob)
+    theta_hash=sample(s,1,replace=TRUE,prob=prob)
+    p=(theta_hash^Sn*(1-theta_hash)^(n-Sn))/
+      (theta[t-1]^Sn*(1-theta[t-1])^(n-Sn))
+    ap=min(1,p)
+    u=runif(1,0,1)
+    if(u<ap){theta[t]=theta_hash}
+    else{theta[t]=theta[t-1]}
+  }
+  return(theta)
+}
+for(t in T){
+  gene = MH1(5000)
+  mycol=adjustcolor("orange",alpha.f=0.8)
+  hist(gene,xlim=c(0,1),xlab="theta",ylab="frequency",
+       col=mycol,breaks=10, main='New MH')
+}
+
+
+value_1=MH1(3000)[1500]
+mean=sum(value_1)/length(value_1)
+int <- sum((value_1-1/2)^2)/length(value_1)
+int
+
+
+
+
+
+
+
+
+
+
+
+
+
+
