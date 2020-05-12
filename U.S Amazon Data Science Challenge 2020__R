@@ -20,7 +20,7 @@ library(crayon)
 mapafter <- read_csv("../Datasets/mapping_files/mapafter.csv")
 score2017 <- read.csv("../Datasets/impact_scores/impact_score_2017.csv",header = T)
 drop<-c("X.1","X")
-score2017 <- score2017[,!(names(score2017) %in% drop)]
+score2017 <- score2017[,!(names(score2017) %in% drop)] 
 
 colnames(mapafter) <- c("lat", "lng","zip5")
 
