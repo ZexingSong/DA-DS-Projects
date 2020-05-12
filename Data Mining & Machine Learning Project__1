@@ -120,7 +120,7 @@ colnames(midtermtest) <- c("X1", "X2")
 
 mse(pred2[1:1960],test[1:1960,3])
 
-
+ 
 
 fitlo_var <- loess(muhat ~ X1+X2, data = data0,  span=0.08)
 pred_var <- predict(fitlo_var, data0[,1:2])
