@@ -1,1 +1,408 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[120]:
+
+
+import pandas as pd
+import numpy as np
+import math
+import random
+from sklearn.neural_network import MLPClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+
+
+# In[157]:
+
+
+# import data
+data = pd.read_csv("../clean_1718.csv")
+data2019 = pd.read_csv("../clean_2019.csv")
+data.shape
+
+
+# In[158]:
+
+
+data2019.shape
+
+
+# In[159]:
+
+
+data2019.head()
+
+
+# In[160]:
+
+
+data.head()
+
+
+# In[192]:
+
+
+#Data Cleaning
+clean = data.drop(['Unnamed: 0'],axis=1)
+clean["Date"] = pd.to_datetime(clean.Date)
+clean.head()
+
+
+# In[193]:
+
+
+clean["Date"] =clean["Date"]-clean["Date"][0]
+clean["Date"] = (clean["Date"]).map(lambda x: x.days)
+
+clean["impact_score_2"].fillna(-10,inplace=True)
+clean.head()
+
+
+# In[195]:
+
+
+clean = clean.dropna(axis=1,how='all') 
+
+
+# In[198]:
+
+
+delindex = []
+for index, row in clean.iteritems():
+    num = clean[index].isna().sum()
+    if num>0.2*clean.shape[0]:
+        delindex.append(index)
+        clean = clean.drop([index],axis=1)
+
+print(delindex) # dropped column
+print(clean.shape) 
+
+
+# In[199]:
+
+
+clean = clean.dropna(axis=0,how='any') 
+clean = clean.reset_index(drop=True)
+
+
+# In[201]:
+
+
+clean["impact_score_ran"] = clean["impact_score"]
+clean.head()
+
+
+# In[202]:
+
+
+#####################
+###Classification####
+#####################
+
+
+# In[203]:
+
+
+true_impact = clean.drop(["impact_score_ran"],axis=1)
+clean["impact_score"].loc[(clean["impact_score"]>0.53) & (clean["impact_score"]<35)]=0
+#A = clean["impact_score_ran"].loc[(clean["impact_score_ran"]<0.53) & (clean["impact_score_ran"]>0.51)]
+clean["impact_score"].loc[(clean["impact_score"]<0.53) & (clean["impact_score"]>0.51)]=1
+clean["impact_score"].loc[(clean["impact_score"]==35)]=2
+clean.head()
+
+
+# In[204]:
+
+
+song_impact = clean["impact_score_2"]
+clean = clean.drop(['impact_score_2'],axis=1)
+clean.head()
+
+
+# In[205]:
+
+
+##### Train/ Test #####
+
+Y = clean.loc[:,"impact_score"]
+
+
+# In[206]:
+
+
+X = clean.drop(["impact_score"],axis=1)
+X.head()
+
+
+# In[207]:
+
+
+##### Cross Validation, Hyper parameter determine, Time consuming, skip####
+#rf = RandomForestClassifier()
+#rf.get_params()
+# from sklearn.model_selection import RandomizedSearchCV
+# # Number of trees in random forest
+# n_estimators = [int(x) for x in np.linspace(start = 500, stop = 1500, num = 6)]
+
+# criterion = ['gini','entropy']
+# # Number of features to consider at every split
+# max_features = ['auto', 'sqrt','log2']
+# # Maximum number of levels in tree
+# max_depth = [int(x) for x in np.linspace(50, 100, num = 6)]
+# max_depth.append(None)
+
+# # Create the random grid
+# random_grid = {'criterion': criterion,
+#                'n_estimators': n_estimators,
+#                'max_features': max_features,
+#                'max_depth': max_depth}
+# random_grid
+# rf_random = RandomizedSearchCV(estimator = rf, param_distributions = random_grid, n_iter = 5, cv = 3, verbose=2, n_jobs = -1)
+
+
+# In[ ]:
+
+
+# #####TUNING
+# tuning_score=[]
+
+# max_score = 0 
+
+# for i in range(5):
+#     X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=i)
+
+#     rf_random.fit(X_train, y_train)
+
+#     test_score = f_random.score(X_test, y_test, sample_weight=None)
+#     if maxscore < testscore:
+#         maxscore = testscore
+#         choose = rf_random
+
+#     weather_random_score.append(testscore)
+
+
+# In[209]:
+
+
+### Random Forest Classification ####
+weather_random_score=[]
+maxscore = 0 
+for i in range(5):
+    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=i)
+    rf_we = RandomForestClassifier()
+    #rf_random.fit(X_train, y_train)
+    rf_we.fit(X_train,y_train)
+    testscore = rf_we.score(X_test, y_test, sample_weight=None)
+    if maxscore < testscore:
+        maxscore = testscore
+        choose = rf_we
+
+    weather_random_score.append(testscore)
+    
+    
+
+
+# In[190]:
+
+
+importance = choose.feature_importances_
+features = X.columns.values.tolist()
+feat_importance = dict(zip(features,importance))
+
+sort_importance = {k: v for k, v in sorted(feat_importance.items(), key=lambda item: item[1],reverse = True)}
+
+
+# In[200]:
+
+
+#modelname.feature_importance_
+col = list(sort_importance.keys())[:10][::-1]
+y = list(sort_importance.values())[:10][::-1]
+#plot
+fig, ax = plt.subplots() 
+width = 0.4 # the width of the bars 
+ind = np.arange(len(y)) # the x locations for the groups
+ax.barh(ind, y, width, color="steelblue")
+ax.set_yticks(ind+width/10)
+ax.set_yticklabels(col, minor=False)
+plt.title("Feature importance in RandomForest Classifier")
+plt.xlabel("Relative importance")
+plt.ylabel("feature") 
+
+
+# In[210]:
+
+
+### Accuracy####
+print(np.mean(weather_random_score))
+print(maxscore)
+
+
+# In[211]:
+
+
+clean["impact_score"]=choose.predict(X)
+clean["song_impact_score"] = song_impact
+
+
+# In[213]:
+
+
+for i in range(0, len(song_impact)):
+    if(clean["impact_score"][i]==0 and song_impact[i] == -1):
+        clean["impact_score"][i] == -1
+
+
+# In[214]:
+
+
+result = clean.drop(["song_impact_score"],axis=1)
+result["true_impact_score"] = true_impact
+result.head()
+
+
+# In[215]:
+
+
+result["impact_score_-1"]=result["impact_score"]
+result["impact_score_0.52"] =result["impact_score"]
+result["impact_score_35"] = result["impact_score"]
+result.head()
+    
+
+
+# In[216]:
+
+
+result["impact_score_-1"].loc[result["impact_score_-1"]!=-1]=0
+result["impact_score_-1"].loc[result["impact_score_-1"]==-1]=1
+result["impact_score_0.52"].loc[(result["impact_score_0.52"]!=1)]=0
+result["impact_score_0.52"].loc[(result["impact_score_0.52"]==1)]=1
+result["impact_score_35"].loc[(result["impact_score_35"]!=2)]=0
+result["impact_score_35"].loc[(result["impact_score_35"]==2)]=1
+
+
+# In[217]:
+
+
+result = result.drop(["impact_score"],axis=1)
+
+
+# In[218]:
+
+
+result["true_impact_score"]=true_impact
+result.head()
+
+
+# In[104]:
+
+
+### OUTPUT FOR NEXT STEP ####
+result.to_csv("out_4scores_3-8.csv",index=False,sep=",")
+
+
+# In[25]:
+
+
+##################
+##################
+#2019 Forecasting#
+##################
+##################
+
+
+# In[177]:
+
+
+data2019 = data2019.drop(['Unnamed: 0'],axis=1)
+data2019["Date"] = pd.to_datetime(data2019.Date)
+
+
+# In[179]:
+
+
+data2019 = data2019.drop(delindex,axis=1)
+
+
+# In[181]:
+
+
+data2019["Date"] =data2019["Date"]-data2019["Date"][0]
+data2019["Date"] = (data2019["Date"]).map(lambda x: x.days)
+data2019.head()
+
+
+# In[183]:
+
+
+X2019 = data2019
+X2019.head()
+
+
+# In[184]:
+
+
+pre2019 = choose.predict(X2019)
+pre2019.shape
+
+
+# In[187]:
+
+
+for i in range(0, len(pre2019)):
+    if(pre2019[i]!=-1):
+        pre2019[i] == -1
+    if pre2019[i] ==2:
+        pre2019[i] =35
+    if pre2019[i] ==1:
+        pre2019[i] = 0.52
+
+
+# In[188]:
+
+
+X2019["impact_score"] = pre2019
+X2019.head()
+
+
+# In[189]:
+
+
+X2019["impact_score_-1"]=X2019["impact_score"]
+X2019["impact_score_0.52"] =X2019["impact_score"]
+X2019["impact_score_35"] = X2019["impact_score"]
+
+X2019.head()
+
+
+# In[ ]:
+
+
+##### OUTPUT for NEXT STEP####
+
+
+# In[190]:
+
+
+X2019["impact_score_-1"].loc[X2019["impact_score_-1"]!=-1]=0
+X2019["impact_score_-1"].loc[X2019["impact_score_-1"]==-1]=1
+X2019["impact_score_0.52"].loc[(X2019["impact_score_0.52"]!=0.52)]=0
+X2019["impact_score_0.52"].loc[(X2019["impact_score_0.52"]==0.52)]=1
+X2019["impact_score_35"].loc[(X2019["impact_score_35"]!=35)]=0
+X2019["impact_score_35"].loc[(X2019["impact_score_35"]==35)]=1
+
+
+# In[195]:
+
+
+X2019.to_csv("pre_out_2019_3-5.csv",index=False,sep=",")
+
+
+# In[ ]:
+
+
+
 
