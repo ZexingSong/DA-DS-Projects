@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Apr  6 00:12:05 2020
+
+@author: zexingsong
+
+"""
+
+
+
+import numpy as np
+import pandas as pd
+from sklearn.decomposition import NMF
+
+
+
+def sim(u, v, distance_metric): 
+    if distance_metric == "l2":
+        d = np.linalg.norm(u-v, ord=2)
+    elif distance_metric == "l1":
+        d = np.linalg.norm(u-v, ord=1)
+    elif distance_metric == "l0":
+        d = np.linalg.norm(u-v, ord=0)
+    else:
+        raise NameError("Unsupported distance metric")
+    
+    return np.exp(-d**2)
+
+
+df = pd.read_excel("movie.xlsx", index_col=0)
+df = df.iloc[:37,1:]
+
+df = df.T
+df = df.reset_index()
+
+#user_names = df["Name"]
+
+df = df.drop(["index", "Favourite Genres", "Movie Ratings"], axis=1) 
+
+df.columns = list(df)
+
+df = pd.get_dummies(df, columns = ['Gender', 'Favourite Colour'], prefix = ['gender', 'color'])
+
+movie_names = list(df)[12:32]
+
+ratings = df[movie_names]
+
+ratings_orig = ratings.copy().astype(np.float64)
+
+num_nonzero = ratings.astype(bool).sum(axis=1) 
+
+row_mean = ratings.sum(axis=1)/num_nonzero 
+for i in range(ratings.shape[0]):
+    ind = ratings.astype(bool).iloc[i, :]
+    ratings.loc[i, ind] = ratings.loc[i, ind] - row_mean[i]
+
+df[movie_names] = ratings
+df = df.astype(np.float64)
+ratings = ratings.astype(np.float64)
+
+
+
+movie_genres = pd.read_excel("MovieGenres.xlsx", header=None) 
+movie_genres.drop(1,axis=1,inplace=True)
+movie_genres.columns = ['name', 'genre']
+movies = movie_genres['genre'].str.get_dummies(sep=',')
+movies = movies.T
+movies.columns = movie_genres['name'] 
+movies = movies.astype(np.float64) 
+movies
+ 
+
+movie_df = pd.concat([ratings, movies]).T
+
+movie_df
+
+
+
+def user_based_cf(X, ratings, distance_metric):
+    user_sim_matrix = pd.DataFrame(index=X.index, columns=X.index) 
+    for i in range(X.shape[0]-1):
+        for j in range(i+1, X.shape[0]):
+            val = sim(X.iloc[i,:], X.iloc[j,:], distance_metric) 
+            user_sim_matrix.iloc[i,j] = val 
+            user_sim_matrix.iloc[j,i] = val
+
+    ret = ratings.copy()
+    missing_ind = []
+    for i in ratings.index:
+        col_ind = ratings.columns[ratings.iloc[i,:] == 0] 
+        missing_ind.append(col_ind)
+        
+        for one_movie_ind in col_ind:
+            sim_user_ind = ratings[ratings[one_movie_ind]!=0].index
+            predicted_rating = 0
+            
+            for one_sim_user_ind in sim_user_ind:
+                predicted_rating = predicted_rating + user_sim_matrix.loc[i, one_sim_user_ind]*ratings.loc[one_sim_user_ind,one_movie_ind]
+                predicted_rating = predicted_rating/sum(user_sim_matrix.loc[i, sim_user_ind])
+                
+    return ret, missing_ind
+
+
+def item_based_cf(movie_df, ratings, distance_metric):
+    movie_sim_matrix = pd.DataFrame(index=movie_df.index, columns=movie_df.index) 
+    for i in range(movie_df.shape[0]-1):
+        for j in range(i+1, movie_df.shape[0]):
+            val = sim(movie_df.iloc[i,:], movie_df.iloc[j,:], distance_metric) 
+            movie_sim_matrix.iloc[i,j] = val
+            movie_sim_matrix.iloc[j,i] = val
+    
+    ret = ratings.copy()
+    
+    
+    for i in ratings.index:
+        col_ind = ratings.columns[ratings.iloc[i,:] == 0]
+        sim_movie_ind = ratings.columns[ratings.iloc[i,:] != 0] 
+        for one_movie_ind in col_ind:
+            predicted_rating = 0
+            for one_sim_movie_ind in sim_movie_ind:
+                predicted_rating = predicted_rating + movie_sim_matrix.loc[one_movie_ind, one_sim_movie_ind]*ratings.loc[i, one_sim_movie_ind]
+            predicted_rating = predicted_rating/sum(movie_sim_matrix.loc[one_movie_ind,sim_movie_ind])
+            ret.loc[i, one_movie_ind] = predicted_rating
+    return ret
+
+
+def matrix_complete(R, P, Q, K, steps=5000, alpha=0.0002, beta=0.02):
+    Q = Q.T
+    for step in range(steps):
+        for i in range(len(R)):
+            for j in range(len(R[i])):
+                if R[i][j] > 0:
+                    eij = R[i][j] - np.dot(P[i,:],Q[:,j])
+                    for k in range(K):
+                        P[i][k] = P[i][k] + alpha * (2 * eij * Q[k][j] - beta * P[i][k])
+                        Q[k][j] = Q[k][j] + alpha * (2 * eij * P[i][k] - beta * Q[k][j])
+        eR = np.dot(P,Q)
+        e=0
+        for i in range(len(R)):
+            for j in range(len(R[i])):
+                if R[i][j] > 0:
+                    e = e + pow(R[i][j] - np.dot(P[i,:],Q[:,j]), 2)
+                    for k in range(K):
+                        e = e + (beta/2) * (pow(P[i][k],2) + pow(Q[k][j],2))
+        if e < 0.001:
+            break
+    return P, Q.T
+
+
+
+
+new_ratings, missing_ind = user_based_cf(df, ratings_orig, "l2") 
+item_ratings = item_based_cf(movie_df, ratings_orig, "l2") 
+K=2
+R = ratings_orig.iloc[:,:].values
+N = len(R)
+M = len(R[0])
+P = np.random.rand(N,K)
+Q = np.random.rand(M,K)
+nP, nQ = matrix_complete(R, P, Q, K)
+mc_ratings = pd.DataFrame(data=np.dot(nP, nQ.T), index = ratings.index, columns=ratings.columns)
+
+
+d = {
+'Name':list(range(0, 46))}
+ 
+df2 = pd.DataFrame(d)
+df2
+
+df3 = pd.concat([df, df2], axis=1)
+
+
+
+
+
+user_names = df3['Name']
+
+final_df1 = pd.DataFrame(index = range(len(user_names)), columns=['name', 'recommended movie 1', 'score of the recommended movie 1','recommended movie 2',
+                                                'score of the recommended movie 2', 'recommended movie 3', 'score of the recommended movie 3',
+                                                'ecommended movie 1','score of the recommended movie 4',  'ecommended movie 5','score of the recommended movie 5'])
+                                                
+
+final_df2 = final_df1.copy() 
+final_df3 = final_df1.copy()
+
+
+
+for i, row in new_ratings.iterrows():
+    movie_names = list(row.nlargest(5).index)
+    movie_scores = list(row.nlargest(5).values)
+    result = [None]*(len(movie_names)+len(movie_scores)) 
+    result[::2] = movie_names
+    result[1::2] = movie_scores
+    one_row = np.array([user_names[i]] + result)
+    final_df1.iloc[i,:] = one_row
+        
+                        
+
+for i, row in item_ratings.iterrows():
+    movie_names = list(row.nlargest(5).index) 
+    movie_scores = list(row.nlargest(5).values)
+    result = [None]*(len(movie_names)+len(movie_scores))
+    result[::2] = movie_names
+    result[1::2] = movie_scores
+    one_row = np.array([user_names[i]] + result) 
+    final_df2.iloc[i,:] = one_row
+
+
+for i, row in mc_ratings.iterrows():
+    movie_names = list(row.nlargest(5).index) 
+    movie_scores = list(row.nlargest(5).values)
+    result = [None]*(len(movie_names)+len(movie_scores))
+    result[::2] = movie_names
+    result[1::2] = movie_scores
+    one_row = np.array([user_names[i]] + result) 
+    final_df3.iloc[i,:] = one_row
+
+
+
+writer = pd.ExcelWriter('./recommendations.xlsx', engine='xlsxwriter')
+
+final_df1.to_excel(writer, sheet_name='UserCF') 
+final_df2.to_excel(writer, sheet_name='ItemCF') 
+final_df3.to_excel(writer, sheet_name='MatrixCompletion')
+
+writer.save()
+
+
+
+
+
+
+
