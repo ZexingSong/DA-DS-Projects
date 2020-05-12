@@ -1,3 +1,104 @@
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install(version = "3.10")
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install()
+BiocManager::available()
+BiocManager::install()
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install()
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+pkgs <- rownames(installed.packages())
+BiocManager::install(pkgs, type = "source", checkBuilt = TRUE)
+
+
+
+source("http://www.bioconductor.org/biocLite.R")
+deps = c('BiocParallel', 'genefilter', 'DESeq2')
+new_deps = deps[!(deps %in% installed.packages()[,"Package"])]
+if(length(new_deps) != 0){biocLite(new_deps)}
+library('devtools')
+devtools::install_github('edsgard/trendsceek')
+
+vignette('trendsceek')
+############################################################
+############################################################
+
+# this is the installation of Trendsceek package
+
+############################################################
+############################################################
+
+
+library('trendsceek') # import the package after installation.
+
+counts <- read.csv("/Users/andrewsong/Desktop/finaldata_2.csv")
+
+#counts <- t(counts)
+
+#data('scialdone')
+#counts = scialdone[['counts']]
+dim(counts)
+min.ncells.expr = 3  # set up min boundary, due to small size, set default = 0
+min.expr = 5   # set up min boundary, due to small size, set default = 0
+counts_filt = genefilter_exprmat(counts, min.expr, min.ncells.expr)  # to do the first time filter
+dim(counts_filt)
+
+
+quantile.cutoff = 0.9 # a quantilte cutoff, not significant at 0.9
+method = 'glm'  # try generalized model rather than Least square Est
+vargenes_stats = calc_varstats(counts_filt, counts_filt,  method = method)
+# Fit the model 
+
+
+n.topvar = 10   # choose the subset, there are 10 rows totaly, we use half of them
+topvar.genes = rownames(vargenes_stats[['real.stats']])[1:n.topvar]
+# choose the first 5 as the subset in order to compare latter
+
+
+plot.ercc.points = FALSE  # omit points show on graph
+plot_cv2vsmean(vargenes_stats, topvar.genes, plot.ercc.points = plot.ercc.points)
+#basic plot for coefficient after normalized the data matrix
+
+min.count = 1
+counts_norm = deseq_norm(try, min.count)
+
+counts_sub = counts_norm[c(9,4,8,5,3), ] # randomly choose the index of subset, as we mentioned n = 5
+dim(counts_sub)
+
+tsne.k = 2 #Number of tSNE dimensions
+init.dims = 100 #Number of PCA-dimensions to reduce to before tSNE
+perp.frac = 0.2 #Fraction of cells 
+max.iter = 300 #Maximum number of iterations
+epoch = 50 #print status every epoch iteration
+##run tsne including initial pca
+tsne_res = trend.tsne(counts_sub, tsne.k, init.dims, perp.frac, max.iter, epoch)
+
+pp = pos2pp(tsne_res)
+##Set marks as the logged normalized gene expression 
+log.fcn = log10
+pp = set_marks(pp, counts_sub, log.fcn = log.fcn)
+# imitate the Poission pattern 
+
+topvar.genes = rownames(vargenes_stats[['real.stats']])
+pp2plot = pp_select(pp)
+# we only see the subset plots when n = 5
+
+plot_pp_scatter(pp2plot, log_marks = FALSE, scale_marks = FALSE, pal.direction = -1)
+
+# this plots show that the distribution of whole cells under 5 different genes
+# they are at different significant with simlar pattern.
+
+
+
+
+
+
+
+
 library(stringr)
 library(ggplot2)
 library(dplyr)
@@ -147,3 +248,58 @@ ggplot(info_2_3, aes(x = x, y = y)) +
 info_2_3<-info_2_3[!(info_2_3$total_counts < 1670),]
 
 
+#############################################################################################
+
+######################## Spatial Plot for Genes on Cells ####################################
+
+#############################################################################################
+
+
+
+now <- data.frame(rbind(New_form_2,test_2$V4,test_3$V4,test_4$V4,test_5$V4,test_6$V4,test_7$V4,test_8$V4,
+             test_9$V4,test_10$V4,test_11$V4,test_12$V4,test_13$V4,test_14$V4,test_15$V4,
+             test_16$V4,test_17$V4,test_18$V4,test_19$V4,test_20$V4,test_21$V4,test_22$V4,test_23$V4,test_24$V4,
+             test_25$V4,test_26$V4,test_27$V4,test_28$V4,test_29$V4,test_30$V4,test_31$V4,
+             test_32$V4,test_33$V4,test_34$V4,test_35$V4,test_36$V4,test_37$V4,test_38$V4,test_39$V4,
+             test_40$V4,test_41$V4,test_42$V4,test_43$V4,test_44$V4,test_45$V4,test_46$V4,test_47$V4,
+             test_48$V4,test_49$V4,test_50$V4,test_51$V4,test_52$V4,test_53$V4,test_54$V4,test_55$V4,
+             test_56$V4,test_57$V4,test_58$V4,test_59$V4,test_60$V4,test_61$V4,test_62$V4,test_63$V4))
+
+
+colnames(now) <- (unlist(now[1,]))
+now <- now[-1,]
+
+######################################################################################################################
+
+
+
+now2 <- rbind(New_form_2,test_2$V4,test_3$V4,test_4$V4,test_5$V4,test_6$V4,test_7$V4,test_8$V4,
+                        test_9$V4,test_10$V4,test_11$V4,test_12$V4,test_13$V4,test_14$V4,test_15$V4,
+                        test_16$V4,test_17$V4,test_18$V4,test_19$V4,test_20$V4,test_21$V4,test_22$V4,test_23$V4,test_24$V4,
+                        test_25$V4,test_26$V4,test_27$V4,test_28$V4,test_29$V4,test_30$V4,test_31$V4,
+                        test_32$V4,test_33$V4,test_34$V4,test_35$V4,test_36$V4,test_37$V4,test_38$V4,test_39$V4,
+                        test_40$V4,test_41$V4,test_42$V4,test_43$V4,test_44$V4,test_45$V4,test_46$V4,test_47$V4,
+                        test_48$V4,test_49$V4,test_50$V4,test_51$V4,test_52$V4,test_53$V4,test_54$V4,test_55$V4,
+                        test_56$V4,test_57$V4,test_58$V4,test_59$V4,test_60$V4,test_61$V4,test_62$V4,test_63$V4)
+
+#now2 <- data.frame(now2)
+#colnames(now2) <- (unlist(now2[1,]))
+#now2 <- now2[-1,]
+
+write.table(now2, file = "D:/Zexing Song/test_data_file_sample.csv",sep = ",",col.names = F,row.names = T)
+
+now3 <- read.csv("D:/Zexing Song/test_data_file_sample.csv")
+now3 <- now3[,-1]
+
+info <- cbind.data.frame(x=(sapply(strsplit(colnames(now3),split=".x"),"[",1)),
+                         y=as.numeric(sapply(strsplit(colnames(now3),split="x."),"[",2)),
+                         total_counts=apply(now3,2,sum))
+library(stringr)
+library(ggplot2)
+info$x <-as.numeric(str_remove(info$x, "[X]"))
+
+#write.csv(info, file = "D:/Zexing Song/test.csv")
+
+
+ggplot(info,aes(x=x,y=y))+geom_point(aes(size = total_counts),color = "blue")+
+  scale_size_continuous(range = c(0.1,8)) + coord_equal()
