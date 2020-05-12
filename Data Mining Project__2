@@ -1,0 +1,296 @@
+# Library
+library(mapproj)
+library(ggplot2)
+library(dplyr)
+library(e1071)
+library(tune)
+library(reshape2)
+library(class)
+
+# Raw Data import
+
+airline <- read.csv("/Users/zexingsong/desktop/7406 Project/RawData/airlines.csv")
+
+airport <- read.csv("/Users/zexingsong/desktop/7406 Project/RawData/airports.csv")
+
+flight <- read.csv("/Users/zexingsong/desktop/7406 Project/RawData/flights.csv")
+
+##################################################################################################
+### CancellationCode reason for cancellation (A = carrier, B = weather, C = NAS, D = security) ###
+##################################################################################################
+
+
+# Pre-visualization
+
+ggplot(airport) + borders("world",xlim = c(-170, -50), ylim = c(20, 50)) + geom_point(aes(x = LONGITUDE, y = LATITUDE ))+
+  coord_map()+  scale_size_area()
+
+
+# (1) Dimension Reduction
+
+## Delete col: (1)YEAR (2)TAIL_NUMBER (3) AIR_SYSTEM_DELAY (4)SECURITY_DELAY (5)AIRLINE_DELAY (6)LATE_AIRCRAFT_DELAY (7)WEATHER_DELAY
+flight_1 <- subset(flight, select = -c(YEAR,TAIL_NUMBER,AIR_SYSTEM_DELAY,SECURITY_DELAY,AIRLINE_DELAY,LATE_AIRCRAFT_DELAY,WEATHER_DELAY))
+
+# (2) Q1 Subset Filter
+
+flight_2 <- subset(flight_1, flight_1$MONTH %in% c("1","2","3"))
+
+# (3) Divert and Cancel Filter Out 
+
+flight_3 <- flight_2 %>% filter(flight_2$CANCELLED == 0 & flight_2$DIVERTED == 0)
+
+# (4) Final Remove # 
+
+flight_4 <- subset(flight_3, select = -c(AIRLINE,DESTINATION_AIRPORT,ORIGIN_AIRPORT,DIVERTED,CANCELLED,CANCELLATION_REASON))
+
+
+# Target Variable Setup
+
+
+#for (i in (1:length(flight_4$ARRIVAL_DELAY))){
+#  if (flight_4$ARRIVAL_DELAY[i] <= 0){
+#    flight_4$ARRIVAL_DELAY[i] <- 0
+#  }else if (flight_4$ARRIVAL_DELAY[i] > 0 & flight_4$ARRIVAL_DELAY[i] <= 15){
+#    flight_4$ARRIVAL_DELAY[i] <- 1
+#  }else if (15 < flight_4$ARRIVAL_DELAY[i] & flight_4$ARRIVAL_DELAY[i] <= 45){
+#    flight_4$ARRIVAL_DELAY[i] <- 2
+#  }else {flight_4$ARRIVAL_DELAY[i] <- 3}
+#}
+
+flight_4$ARRIVAL_DELAY[flight_4$ARRIVAL_DELAY <= 0] <- 0
+flight_4$ARRIVAL_DELAY[flight_4$ARRIVAL_DELAY > 0 & flight_4$ARRIVAL_DELAY <= 15] <- 1
+flight_4$ARRIVAL_DELAY[flight_4$ARRIVAL_DELAY > 15 & flight_4$ARRIVAL_DELAY <= 45] <- 2
+flight_4$ARRIVAL_DELAY[flight_4$ARRIVAL_DELAY > 45] <- 3
+
+flight_4$ARRIVAL_DELAY <- as.factor(flight_4$ARRIVAL_DELAY)
+
+# Apply SVM for flight_4
+
+test_1 <- subset(flight_4, flight_4$MONTH == 1)
+
+test_1 <- subset(test_1, select = -c(MONTH,SCHEDULED_ARRIVAL,ARRIVAL_TIME,FLIGHT_NUMBER,SCHEDULED_DEPARTURE,DEPARTURE_TIME))
+
+
+n <- nrow(test_1)
+ntrain <- round(n*0.1)  
+set.seed(7406) 
+
+tindex <- sample(n, ntrain)
+train_flight_4 <- flight_4[tindex,]
+test_flight_4 <- flight_4[-tindex,]
+
+
+
+test_2 <- train_flight_4
+
+test_2 <- subset(test_2, select = -c(MONTH,SCHEDULED_ARRIVAL,ARRIVAL_TIME,FLIGHT_NUMBER,SCHEDULED_DEPARTURE,DEPARTURE_TIME))
+
+n_2 <- nrow(test_2)
+ntrain_2 <- round(n_2*0.8)  
+set.seed(7406) 
+tindex_2 <- sample(n_2, ntrain_2)
+train_flight_4_2 <- test_2[tindex_2,]
+test_flight_4_2 <- test_2[-tindex_2,]
+
+
+n_3 <- nrow(test_flight_4_2)
+ntrain_3 <- round(n_3*0.8)  
+set.seed(7406) 
+tindex_3 <- sample(n_3, ntrain_3)
+train_flight_4_3 <- test_flight_4_2[tindex_3,]
+test_flight_4_3 <- test_flight_4_2[-tindex_3,]
+
+train_flight_4_3_2 <- subset(train_flight_4_3, select = -c(DAY_OF_WEEK)) # Try 1
+
+Model_1 <- svm(ARRIVAL_DELAY ~ ., data = train_flight_4_3_2, method="C-classification", kernal="radial", gamma=0.1, cost=20)
+summary(Model_1)
+
+test_flight_4_2 <- subset(test_flight_4, select = -c(DAY_OF_WEEK)) # Try 1
+
+prediction <- predict(Model_1, train_flight_4_3_2[-11])
+
+error <- mean(prediction != train_flight_4_3_2[,11])
+error  # Testing Error For Q1 --- 0.07315388; 
+
+
+# Exploratory Data Analysis 
+
+
+## 2.1 -- Basic statistical description of airlines
+
+total_count <- flight %>% group_by(AIRLINE) %>% mutate(airline_count = n()) %>% summarise(num = n()) %>%
+  mutate(perc = round(num/sum(num),4)*100,lab.ypos = cumsum(perc) - 0.5*perc )
+
+ggplot(total_count, aes(x="", y=num, fill=AIRLINE)) + geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", start=0) + geom_text(aes(label = paste(perc,"%",sep = "")),position = position_stack(vjust = 0.5), color = "white") + theme_void()
+
+
+
+
+# 2.2 -- Arrival Delay Information
+
+
+Airline_delay <- flight_3
+Airline_delay$ARRIVAL_DELAY[Airline_delay$ARRIVAL_DELAY <= 0] <- 0 #(Factor)
+Airline_delay$ARRIVAL_DELAY[Airline_delay$ARRIVAL_DELAY > 0 & Airline_delay$ARRIVAL_DELAY <= 15] <- 1 #(Factor)
+Airline_delay$ARRIVAL_DELAY[Airline_delay$ARRIVAL_DELAY > 15 & Airline_delay$ARRIVAL_DELAY <= 45] <- 2 #(Factor)
+Airline_delay$ARRIVAL_DELAY[Airline_delay$ARRIVAL_DELAY > 45] <- 3 #(Factor)
+
+Airline_delay$ARRIVAL_DELAY <- as.factor(Airline_delay$ARRIVAL_DELAY)
+
+
+Airline_delay_2 <- Airline_delay %>% group_by(AIRLINE,ARRIVAL_DELAY) %>% mutate(count = n()) %>% summarise(num = n())
+
+
+
+ggplot(Airline_delay_2, mapping = aes(x= reorder(AIRLINE,num),num)) + 
+  geom_bar(aes(fill = ARRIVAL_DELAY),position = position_stack(reverse = TRUE),stat = "identity", width=0.5) + 
+  theme(legend.position = "top")+coord_flip()
+
+
+# 3. 
+
+both_delay_1 <- flight
+
+both_delay_1 <- both_delay_1[!is.na(both_delay_1$DEPARTURE_DELAY),]
+both_delay_1 <- both_delay_1[!is.na(both_delay_1$ARRIVAL_DELAY),]
+
+both_delay_2 <- both_delay_1 %>% group_by(AIRLINE) %>% 
+  mutate(ave_dep = mean(DEPARTURE_DELAY),ave_arr = mean(ARRIVAL_DELAY)) %>% 
+  summarise(ave_dep = first(ave_dep),ave_arr = first(ave_arr))
+
+
+both_delay_3 <- melt(both_delay_2, id.vars='AIRLINE')
+
+ggplot(both_delay_3, aes(x=AIRLINE, y=value, fill=variable)) +
+  geom_bar(stat='identity', position='dodge')+theme(legend.position = "top")
+
+
+
+
+# SVM model train with final data 
+
+
+final_1 <- read.csv("/Users/zexingsong/Desktop/7406 Project/cleaned_data_for_modeling_final2.csv")
+
+
+
+final_2 <- subset(final_1, select = c(DAY,DEPARTURE_DELAY,TAXI_OUT,WHEELS_OFF,SCHEDULED_TIME,ELAPSED_TIME,AIR_TIME,DISTANCE,WHEELS_ON,TAXI_IN,ARRIVAL_DELAY))
+
+final_2 <- subset(final_1, select = c(DAY,DEPARTURE_DELAY,TAXI_OUT,SCHEDULED_TIME,ELAPSED_TIME,AIR_TIME,DISTANCE,TAXI_IN,ARRIVAL_DELAY))
+
+
+final_3 <- final_2
+final_3$ARRIVAL_DELAY[final_3$ARRIVAL_DELAY <= 0] <- 0
+final_3$ARRIVAL_DELAY[final_3$ARRIVAL_DELAY > 0 & final_3$ARRIVAL_DELAY <= 15] <- 1
+final_3$ARRIVAL_DELAY[final_3$ARRIVAL_DELAY > 15 & final_3$ARRIVAL_DELAY <= 45] <- 2
+final_3$ARRIVAL_DELAY[final_3$ARRIVAL_DELAY > 45] <- 3
+
+final_3$ARRIVAL_DELAY <- as.factor(final_3$ARRIVAL_DELAY)
+
+
+
+####################################################################################################
+
+
+n_6 <- nrow(final_3)
+ntrain_6 <- round(n_6*0.7)  
+set.seed(7406) 
+tindex_6 <- sample(n_6, ntrain_6)
+train_6<- final_3[tindex_6,]
+test_6 <- final_3[-tindex_6,]
+
+# change order for Train and Test 
+
+tuned_parameters <- tune.svm(ARRIVAL_DELAY~., data = test_6, gamma = 0.1, cost = seq(1170,1210,10))
+summary(tuned_parameters)
+Model_2 <- svm(ARRIVAL_DELAY ~ ., data = test_6, method="C-classification", kernal="radial",gamma = 0.1, cost = 1180)
+#summary(Model_2)
+
+
+prediction_2 <- predict(Model_2, test_6[-9])
+
+error_train <- mean(prediction_2 != test_6[,9])
+error_train 
+
+
+
+prediction_test_2 <- predict(Model_2, train_6[-9])
+
+error_test <- mean(prediction_test_2 != train_6[,9])
+error_test  
+
+
+
+####################################################################################################
+
+
+
+
+
+
+
+#tuned_parameters <- tune.svm(ARRIVAL_DELAY~., data = final_3, gamma = 10^(-5:-1), cost = 10^(-3:1))
+
+
+
+####### For Training ########
+prediction <- predict(Model_2, final_3[-9])
+
+error <- mean(prediction != final_3[,9])
+error  # Training Error = 0.01238095 with gamma=0.1, cost=20
+
+
+####### For Testing ########
+prediction_test <- predict(Model_2, train_flight_4_3_2[-9])
+
+error_2 <- mean(prediction_test != train_flight_4_3_2[,9])
+error_2  # Testing Error = 0.04554158 with gamma=0.1, cost=20
+
+
+##### K-fold Cross-Vaildation ########
+
+
+cost.seq <- seq(1150,1250,10) 
+k <- 10
+
+folds <- sample(x = 1:k, size = length(final_3$ARRIVAL_DELAY), replace = TRUE)
+cv.error.mtrx <- matrix(rep(x = NA, times = k * length(cost.seq)), 
+                        nrow = length(cost.seq), ncol = k)
+
+
+for(i in 1:length(cost.seq)) {
+  for(j in 1:k) {
+    Model_cv <- svm(ARRIVAL_DELAY ~ ., data = final_3[folds != j, ], method="C-classification", kernal="radial", gamma=0.1, cost=cost.seq[i])
+    prediction_cv <- predict(Model_cv, final_3[-11][folds == j, ])
+    
+    cv.error.mtrx[i, j] <- mean((final_3$ARRIVAL_DELAY[folds == j] != prediction_cv), na.rm = TRUE)
+  }
+}
+
+cv.errors <- rowMeans(cv.error.mtrx)
+best.span.i <- which.min(cv.errors)
+best.span.i
+cost.seq[best.span.i]
+
+
+
+plot(x = cost.seq, y = cv.errors, type = "l", main = "k-Fold CV Plot for Delay Time Narrow Interval")
+points(x = cost.seq, y = cv.errors, 
+       pch = 20, cex = 1.75, col = "blue")
+points(x = cost.seq[best.span.i], y = cv.errors[best.span.i], 
+       pch = 20, cex = 1, col = "red")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
